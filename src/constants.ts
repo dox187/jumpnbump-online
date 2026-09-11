@@ -67,12 +67,12 @@ export enum SFX {
 }
 
 export enum SFX_FREQ {
-    JUMP = 15000,
-    LAND = 15000,
-    DEATH = 20000,
-    SPRING = 15000,
-    SPLASH = 12000,
-    FLY = 12000,
+    JUMP = 8000,
+    LAND = 8000,
+    DEATH = 8000,
+    SPRING = 8000,
+    SPLASH = 8000,
+    FLY = 8000,
 }
 
 export enum BAN {
