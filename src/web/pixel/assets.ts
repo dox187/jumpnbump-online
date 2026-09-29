@@ -17,6 +17,8 @@ export type Sprite = {
 export type GameAssets = {
     /** The 400x256 menu screen with the forest and the logo. */
     menu: HTMLCanvasElement;
+    /** The parts of the menu screen in front of the bunnies (menumask.pcx: the log's front end), transparent elsewhere. */
+    menu_front: HTMLCanvasElement;
     rabbit: Sprite[];
     objects: Sprite[];
 };
@@ -75,9 +77,23 @@ export function load_game_assets(): Promise<GameAssets> {
                 }
                 context.putImageData(image, 0, 0);
 
+                const mask = read_pcx('menumask.pcx', null);
+                const menu_front = document.createElement('canvas');
+                menu_front.width = 400;
+                menu_front.height = 256;
+                const front_context = menu_front.getContext('2d')!;
+                const front = front_context.createImageData(400, 256);
+                for (let p = 0; p < 400 * 256; p++) {
+                    if (!mask[p]) continue;
+                    to_rgb(palette, pixels[p], front.data, p * 4);
+                    front.data[p * 4 + 3] = 255;
+                }
+                front_context.putImageData(front, 0, 0);
+
                 init_font(read_gob('font.gob'));
                 loaded = {
                     menu,
+                    menu_front,
                     rabbit: sprites_of(read_gob('rabbit.gob'), palette),
                     objects: sprites_of(read_gob('objects.gob'), palette),
                 };

@@ -568,7 +568,8 @@ const ICONS: Record<string, { rows: string[]; colors: Record<string, string> }> 
 };
 
 const icon_cache = new Map<string, HTMLCanvasElement>();
-function icon_canvas(name: string) {
+/** An icon at native resolution (one canvas pixel per game pixel), e.g. to draw it onto another canvas. */
+export function icon_canvas(name: string) {
     let canvas = icon_cache.get(name);
     if (!canvas) {
         const { rows, colors } = ICONS[name];
