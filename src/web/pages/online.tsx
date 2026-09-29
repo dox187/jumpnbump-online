@@ -4,11 +4,10 @@ import { PageMeta, usePageMeta } from '../hooks/page-meta';
 import { useNet } from '../hooks/net';
 import { useGamepads } from '../hooks/gamepads';
 import { OnlineSettings, useOnlineSettings } from '../hooks/online-settings';
-import { Level } from '../components/level-selector';
 import { ConfigureController } from '../components/configure-controller';
-import { MAPPINGS, getFriendlyGamepadName, getGamepadId, getKnownGamepadDefaults } from '../components/controls';
+import { MAPPINGS, getFriendlyGamepadName, getGamepadId, getKnownGamepadDefaults } from '../controls';
 import type { MatchSettings } from '../components/online-match';
-import { RECOMMENDED_LEVELS } from '../constants';
+import { Level, RECOMMENDED_LEVELS } from '../constants';
 import { net, NetState } from '../../net/client';
 import {
     BUNNY_NAMES,
@@ -47,17 +46,17 @@ const OnlineMatch = lazy(() => import('../components/online-match'));
 const onlinePageMeta: PageMeta = {
     title: "Jump 'n Bump Online",
     description: "Play Jump 'n Bump online with your friends: create a room, pick a level and start bumping.",
-    keywords: ["Jump 'n Bump", 'online multiplayer', 'browser game', 'retro game', 'bunny game'],
-    ogDescription: "Play Jump 'n Bump online with your friends.",
-    ogUrl: '/',
     robots: 'noindex',
 };
+
+/** Where the Source links point; set VITE_SOURCE_URL at build time when you publish your own changes. */
+const SOURCE_URL = import.meta.env.VITE_SOURCE_URL || 'https://github.com/jamsinclair/jumpnbump.js';
 
 type Toast = { message: string; color: TextColor; seq: number; at: number };
 
 const TOAST_MS = 5000;
 
-/** The last match result the player has seen, per room; the room view unmounts while a match runs. */
+/** Per room, the match whose result the player has seen; the room view unmounts while a match runs. */
 const seen_results = new Map<string, string>();
 const ROOMS_PER_PAGE = 8;
 const LEVELS_PER_PAGE = 15;
@@ -127,19 +126,23 @@ function At({
     );
 }
 
-function TextLink({ href, label }: { href: string; label: string }) {
+/** A link in the game font; without `href` it is a button. */
+function TextLink({ href, label, onClick }: { href?: string; label: string; onClick?: () => void }) {
     const [hot, setHot] = useState(false);
+    const Tag = href ? 'a' : 'button';
     return (
-        <a
+        <Tag
             href={href}
-            className="inline-flex"
+            type={href ? undefined : 'button'}
+            className="inline-flex cursor-pointer"
+            onClick={onClick}
             onMouseEnter={() => setHot(true)}
             onMouseLeave={() => setHot(false)}
             onFocus={() => setHot(true)}
             onBlur={() => setHot(false)}
         >
             <Text text={label} color={hot ? 'gold' : 'dim'} shadow />
-        </a>
+        </Tag>
     );
 }
 
@@ -554,7 +557,7 @@ function OptionsDialog({
 
     return (
         <>
-            <Dialog title="OPTIONS" onClose={onClose} width={250}>
+            <Dialog title="OPTIONS" onClose={configuring ? undefined : onClose} width={250}>
                 <div className="gp-col">
                     <Text text="Controls" color="wood" />
                     <div className="gp-row">
@@ -620,6 +623,60 @@ function OptionsDialog({
                 />
             )}
         </>
+    );
+}
+
+const SECRETS = ['jetpack', 'pogostick', 'lordoftheflies', 'bunniesinspace', 'bloodisthickerthanwater'];
+
+function AboutDialog({ onClose }: { onClose: () => void }) {
+    const [secrets, setSecrets] = useState(false);
+    return (
+        <Dialog title={secrets ? 'SECRETS' : 'ABOUT'} onClose={onClose} width={300}>
+            <div className="gp-col">
+                {secrets ? (
+                    <>
+                        <Paragraph
+                            text="Type these words during a local game to switch them on or off. They do not work online."
+                            width={284}
+                        />
+                        <div className="gp-col" style={{ gap: 0, alignItems: 'center' }}>
+                            {SECRETS.map((word) => (
+                                <Text key={word} text={word} color="gold" />
+                            ))}
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <Paragraph
+                            text="Jump 'n Bump was made in 1998 by Brainchild Design:"
+                            width={284}
+                            color="gold"
+                        />
+                        <div className="gp-col" style={{ gap: 0 }}>
+                            <Paragraph text="Mattias Brynervall - code" width={284} />
+                            <Paragraph text="Andreas Brynervall and Martin Magnusson - graphics" width={284} />
+                            <Paragraph text="Anders Nilsson - music and sound" width={284} />
+                        </div>
+                        <Paragraph
+                            text="Jamie Sinclair ported it to the browser (jumpnbump.js). This version adds online play."
+                            width={284}
+                        />
+                        <Paragraph
+                            text="It is free software under the GNU GPL, version 2 or later."
+                            width={284}
+                            color="dim"
+                        />
+                    </>
+                )}
+                <div className="gp-row justify-between">
+                    <TextLink href={SOURCE_URL} label="Source code" />
+                    <div className="gp-row" style={{ gap: gp(3) }}>
+                        <Button label={secrets ? 'BACK' : 'SECRETS'} onClick={() => setSecrets(!secrets)} />
+                        <Button label="OK" primary onClick={onClose} width={40} />
+                    </div>
+                </div>
+            </div>
+        </Dialog>
     );
 }
 
@@ -703,8 +760,9 @@ function Room({
     const lastResult = room.lastResult;
     const canPick = room.status === 'lobby';
 
-    // Show the results when a match ends, but not the old result of a room you have just joined
-    const resultKey = lastResult ? JSON.stringify(lastResult) : '';
+    // Show the results when a match ends, but not the old result of a room you have just joined,
+    // and not after a match you played to the end: its score screen already showed them
+    const resultKey = lastResult?.match ?? '';
     useEffect(() => {
         const seen = seen_results.get(room.id);
         if (seen !== undefined && resultKey && resultKey !== seen) setShowResults(true);
@@ -851,7 +909,7 @@ export default function Online() {
     const gamepads = useGamepads();
     const [assets, setAssets] = useState<GameAssets | null>(game_assets());
     const [assetsFailed, setAssetsFailed] = useState(false);
-    const [dialog, setDialog] = useState<'name' | 'create' | 'options' | null>(null);
+    const [dialog, setDialog] = useState<'name' | 'create' | 'options' | 'about' | null>(null);
     const [lockedRoom, setLockedRoom] = useState<RoomSummary | null>(null);
     const [toast, setToast] = useState<Toast | null>(null);
     const toastSeq = useRef(0);
@@ -874,6 +932,10 @@ export default function Online() {
     useEffect(() => {
         if (loaded && settings.name && state.status === 'idle') net.connect(settings.name);
     }, [loaded, settings.name, state.status]);
+
+    useEffect(() => {
+        if (state.match_over && state.match && state.room) seen_results.set(state.room.id, state.match.id);
+    }, [state.match_over, state.match?.id]);
 
     // Invite links: open rooms are joined right away, locked ones ask for the password
     const invited = useRef(roomFromUrl());
@@ -971,12 +1033,9 @@ export default function Online() {
                 <At x={SCENE_X + 8} y={262}>
                     <div className="gp-row" style={{ gap: gp(8) }}>
                         <TextLink href="/local" label="Local game" />
-                        <TextLink href="/levels" label="Levels" />
-                        <TextLink href="/about" label="About" />
-                        <TextLink
-                            href={import.meta.env.VITE_SOURCE_URL || 'https://github.com/jamsinclair/jumpnbump.js'}
-                            label="Source"
-                        />
+                        <TextLink label="Options" onClick={() => setDialog('options')} />
+                        <TextLink label="About" onClick={() => setDialog('about')} />
+                        <TextLink href={SOURCE_URL} label="Source" />
                     </div>
                 </At>
             )}
@@ -999,6 +1058,7 @@ export default function Online() {
             {dialog === 'options' && (
                 <OptionsDialog settings={settings} updateSettings={updateSettings} onClose={() => setDialog(null)} />
             )}
+            {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
             {lockedRoom && !room && <PasswordDialog room={lockedRoom} onClose={() => setLockedRoom(null)} />}
 
             <ToastView toast={toast} onDismiss={() => net.clear_error()} />

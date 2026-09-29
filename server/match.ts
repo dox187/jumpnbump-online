@@ -260,6 +260,7 @@ export class Match {
 
     private result(reason: MatchEndReason): MatchResult {
         return {
+            match: this.id,
             reason,
             endScore: this.end_score,
             level: this.info.level,

@@ -32,11 +32,12 @@ Features of the online mode:
 - Up to four players per room. Everyone plays on their own keyboard or gamepad and picks their bunny (Dott, Jiffy,
   Fizz or Mijji).
 - The host chooses the level and the score limit (first to 5, 10, 25, 50 or 100 bumps) and starts the match.
-- The classic score screen at the end of a match, and a result table in the room afterwards.
+- The players' names above their bunnies and on the classic score screen at the end of a match; the result table
+  stays available in the room under **LAST MATCH**.
 - Local settings per player: controls, mute music or sound effects, no gore, no flies.
 
-The original local game (up to four players on one keyboard, with computer players) is still available under
-**LOCAL** (`/local`).
+The original local game (up to four players on one keyboard, with computer players) is still available: **Local
+game** on the start page (`/local`) starts it right away in the game's own menu.
 
 ## Installation
 
@@ -134,8 +135,8 @@ published ports through the host's address.
    password.
 4. Click a free bunny in the forest to play as it. The host chooses the level and the score limit and presses
    **START MATCH**.
-5. In a match, move with the keys or the gamepad chosen under **OPTIONS** (arrow keys by default). Hold **TAB** to
-   see who plays which bunny, **SHIFT + F** toggles fullscreen. Pressing **ESC** twice leaves the match; for the
+5. In a match, move with the keys or the gamepad chosen under **OPTIONS** (arrow keys by default). Everyone's name
+   is shown above their bunny; hold **TAB** to see the list of players, **SHIFT + F** toggles fullscreen. Pressing **ESC** twice leaves the match; for the
    host it ends the match for everyone.
 
 The online pages are drawn with the game's own graphics: the menu forest, the bitmap font (with added Hungarian
@@ -163,7 +164,9 @@ Cheats and the 1-4 computer-player keys are disabled online, and each browser co
   three or more players); the original searched forever.
 - The in-game score digits no longer pile up in memory, and a separate **mute music** option was added for the
   online mode.
-- The fake member and online counters in the page header were replaced by the real number of connected players.
+- The jumpnbump.net website pages (levels, about, secrets and the local game setup page) were replaced: credits and
+  secrets are in the **About** window of the start page, the local game starts directly, and the old addresses lead
+  to the start page.
 
 ## Development
 
@@ -186,16 +189,12 @@ The controls on a **QWERTY** keyboard are:
 - J, I, L to steer Fizz
 - 4, 8, 6 to steer Mijji (on the numeric pad)
 
-- ? (SHIFT + /) toggles the shortcut overlay
+- 1-4 switch the computer player for that bunny on or off during a game
 - F (SHIFT + f) toggles fullscreen
-- ESC ends the current game. When pressed from the menu screen it will exit to the Web UI landing page.
+- ESC ends the current game. When pressed from the menu screen it goes back to the start page.
 
-Game controllers (gamepads) are supported via the Web Gamepad API. When a controller is connected, it appears as an
-option in the player control dropdowns. Some controllers have built-in default mappings (e.g. 8BitDo Micro, Nintendo
-Joy-Con); for others use the **Configure** button to map left, right and jump.
-
-Additional levels can be chosen with the **Change Level** button, and any valid `.dat` level file can be loaded
-with **Load Level File** in the local game.
+In the menu, jump over the log to join and run off the right edge to start. The local game uses the original level
+and the sound, gore and flies settings from **OPTIONS**.
 
 ## License
 

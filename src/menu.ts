@@ -27,7 +27,15 @@ const menu_cur_pal = new Uint8ClampedArray(768);
 
 function update_objects() {}
 
-const message = ['Discover over 250 fan levels', 'relive the classic game!'];
+const message = [
+    "Jump 'n Bump by Brainchild Design, 1998",
+    'Dott: arrow keys     Jiffy: A W D',
+    'Fizz: J I L     Mijji: numpad 4 8 6',
+    'Jump over the log to join the game,',
+    'then run off the right edge to start!',
+    'In the game, 1-4 switch computer bunnies',
+    'SHIFT F: fullscreen     ESC: back',
+];
 
 const NUM_MESSAGES = message.length;
 

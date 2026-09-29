@@ -3,29 +3,19 @@ import { useEffect } from 'preact/hooks';
 export type PageMeta = {
     title: string;
     description: string;
-    keywords: string[];
-    ogImage?: string;
-    ogDescription: string;
-    ogTitle?: string;
-    ogType?: string;
     robots?: string;
-    ogUrl: string;
-    canonical?: string;
-    structuredData?: Record<string, any>;
 };
 
-function updateOrCreateMeta(attribute: string, value: string) {
-    const isProperty = attribute.startsWith('og:');
-    const attrName = isProperty ? 'property' : 'name';
-
-    const existingMeta = document.querySelector(`meta[${attrName}="${attribute}"]`);
+function updateOrCreateMeta(name: string, value: string) {
+    const existingMeta = document.querySelector(`meta[name="${name}"]`);
     if (existingMeta) {
-        existingMeta.setAttribute(attrName, attribute);
         existingMeta.setAttribute('content', value);
         return;
     }
-
-    document.head.insertAdjacentHTML('beforeend', `<meta ${attrName}="${attribute}" content="${value}" />`);
+    const meta = document.createElement('meta');
+    meta.setAttribute('name', name);
+    meta.setAttribute('content', value);
+    document.head.appendChild(meta);
 }
 
 export function usePageMeta(meta: PageMeta) {
@@ -36,47 +26,11 @@ export function usePageMeta(meta: PageMeta) {
 
     useEffect(() => {
         document.title = meta.title;
-
         updateOrCreateMeta('description', meta.description);
-        updateOrCreateMeta('keywords', meta.keywords.join(', '));
-
-        updateOrCreateMeta('og:image', meta.ogImage || 'https://jumpnbump.net/jump-og.jpg');
-        updateOrCreateMeta('og:description', meta.ogDescription);
-        updateOrCreateMeta('og:title', meta.ogTitle || meta.title);
-        updateOrCreateMeta('og:type', meta.ogType || 'website');
-        updateOrCreateMeta('og:url', meta.ogUrl);
-
-        updateOrCreateMeta('twitter:card', 'summary_large_image');
-        updateOrCreateMeta('twitter:title', meta.ogTitle || meta.title);
-        updateOrCreateMeta('twitter:description', meta.ogDescription);
-        updateOrCreateMeta('twitter:image', meta.ogImage || 'https://jumpnbump.net/jump-og.jpg');
-
         if (meta.robots) {
             updateOrCreateMeta('robots', meta.robots);
         } else {
             document.querySelector('meta[name="robots"]')?.remove();
         }
-
-        const existingCanonical = document.querySelector('link[rel="canonical"]');
-        if (meta.canonical) {
-            if (existingCanonical) {
-                existingCanonical.setAttribute('href', meta.canonical);
-            } else {
-                document.head.insertAdjacentHTML('beforeend', `<link rel="canonical" href="${meta.canonical}" />`);
-            }
-        } else {
-            existingCanonical?.remove();
-        }
-
-        if (meta.structuredData) {
-            const existingStructuredData = document.querySelector('script[type="application/ld+json"]');
-            if (existingStructuredData) {
-                existingStructuredData.remove();
-            }
-            document.head.insertAdjacentHTML(
-                'beforeend',
-                `<script type="application/ld+json">${JSON.stringify(meta.structuredData)}</script>`
-            );
-        }
-    }, [meta]);
+    }, [meta.title, meta.description, meta.robots]);
 }

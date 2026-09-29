@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'preact/hooks';
-import { Card } from './card';
+import { Button, Dialog, Paragraph, Text } from '../pixel/components';
 
 type ConfigPhase = 'left' | 'right' | 'jump' | 'confirm';
 
@@ -26,14 +26,14 @@ export function ConfigureController({ gamepad, onComplete, onCancel }: Configure
         left: 'Move Left',
         right: 'Move Right',
         jump: 'Jump',
-        confirm: 'Confirm Configuration',
+        confirm: 'Check the buttons',
     };
 
     const phaseDescriptions: Record<ConfigPhase, string> = {
         left: 'Press the button you want to use to move left',
         right: 'Press the button you want to use to move right',
         jump: 'Press the button you want to use to jump',
-        confirm: 'Review your controller configuration',
+        confirm: 'Save these buttons for this gamepad?',
     };
 
     const phaseIndex = ['left', 'right', 'jump', 'confirm'].indexOf(phase);
@@ -183,107 +183,58 @@ export function ConfigureController({ gamepad, onComplete, onCancel }: Configure
         return mapping;
     };
 
+    const duplicate = mappings.some((m, i) => mappings.indexOf(m) !== i && m !== '');
+
     return (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/70 z-50">
-            <div className="w-full max-w-md p-8">
-                <Card title="Configure Controller" className="w-full">
-                    <div className="flex flex-col gap-3 mt-3">
-                        {/* Progress indicator */}
-                        <div className="flex items-center justify-between mb-2">
-                            {['left', 'right', 'jump', 'confirm'].map((step, index) => (
-                                <div
-                                    key={step}
-                                    className={`w-5 h-5 rounded-full flex items-center justify-center text-xs ${
-                                        index < phaseIndex
-                                            ? 'bg-brainchild-secondary text-white'
-                                            : index === phaseIndex
-                                              ? 'bg-brainchild-tertiary border-2 border-black'
-                                              : 'bg-gray-200 border-2 border-gray-400'
-                                    }`}
-                                >
-                                    {index + 1}
-                                </div>
-                            ))}
-                        </div>
-
-                        <h3 className="text-lg font-bold text-center">{phaseLabels[phase]}</h3>
-                        <p className="text-sm md:text-xs text-center mb-4">{phaseDescriptions[phase]}</p>
-
-                        {phase === 'confirm' ? (
-                            <div className="mt-2">
-                                <h4 className="text-md font-bold">Your Configuration:</h4>
-                                <ul className="list-disc list-inside text-sm md:text-xs mt-2">
-                                    <li>
-                                        <span className="font-bold">Move Left:</span>{' '}
-                                        {getFriendlyButtonName(mappings[0])}
-                                    </li>
-                                    <li>
-                                        <span className="font-bold">Move Right:</span>{' '}
-                                        {getFriendlyButtonName(mappings[1])}
-                                    </li>
-                                    <li>
-                                        <span className="font-bold">Jump:</span> {getFriendlyButtonName(mappings[2])}
-                                    </li>
-                                </ul>
-
-                                {mappings.some((m, i) => mappings.indexOf(m) !== i && m !== '') && (
-                                    <div className="mt-2 p-2 bg-red-100 border-red-300 border rounded text-sm text-red-700">
-                                        Warning: You have assigned the same input to multiple actions, which may cause
-                                        issues during gameplay.
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            <div className="bg-gray-100 border-2 border-black rounded-lg p-4 text-center h-16 flex items-center justify-center">
-                                {listening ? (
-                                    <p className="text-sm animate-pulse">Waiting for input...</p>
-                                ) : (
-                                    <p className="text-sm font-bold">
-                                        Detected: {getFriendlyButtonName(detectedButton || '')}
-                                    </p>
-                                )}
-                            </div>
+        <Dialog title="SET UP GAMEPAD" onClose={onCancel} width={230}>
+            <div className="gp-col">
+                <div className="gp-row justify-between">
+                    <Text text={phaseLabels[phase]} color="gold" />
+                    {phase !== 'confirm' && <Text text={`${phaseIndex + 1}/3`} color="dim" />}
+                </div>
+                <Paragraph text={phaseDescriptions[phase]} width={214} />
+                {phase === 'confirm' ? (
+                    <div className="gp-col" style={{ gap: 0 }}>
+                        <Text text={`Move left: ${getFriendlyButtonName(mappings[0])}`} />
+                        <Text text={`Move right: ${getFriendlyButtonName(mappings[1])}`} />
+                        <Text text={`Jump: ${getFriendlyButtonName(mappings[2])}`} />
+                        {duplicate && (
+                            <Paragraph
+                                text="The same input is used for more than one action."
+                                width={214}
+                                color="red"
+                            />
                         )}
-
-                        <div className="flex justify-between gap-2 mt-4">
-                            <button
-                                onClick={onCancel}
-                                className="bg-gray-300 hover:bg-gray-400 border-1 border-black p-1 text-md md:text-sm font-bold uppercase"
-                            >
-                                Cancel
-                            </button>
-
-                            {phase === 'confirm' ? (
-                                <>
-                                    <button
-                                        onClick={handleReset}
-                                        className="bg-brainchild-tertiary hover:bg-brainchild-tertiary-hover border-1 border-black p-1 text-md md:text-sm font-bold uppercase"
-                                    >
-                                        Reset
-                                    </button>
-                                    <button
-                                        onClick={handleConfirm}
-                                        className="bg-brainchild-primary hover:bg-brainchild-primary-hover border-1 border-black p-1 text-md md:text-sm font-bold uppercase"
-                                    >
-                                        Confirm
-                                    </button>
-                                </>
-                            ) : (
-                                <button
-                                    onClick={() => {
-                                        if (phase === 'left') setPhase('right');
-                                        else if (phase === 'right') setPhase('jump');
-                                        else if (phase === 'jump') setPhase('confirm');
-                                    }}
-                                    className="bg-brainchild-primary hover:bg-brainchild-primary-hover border-1 border-black p-1 text-md md:text-sm font-bold uppercase"
-                                >
-                                    Skip
-                                </button>
-                            )}
-                        </div>
                     </div>
-                </Card>
+                ) : (
+                    <Text
+                        text={
+                            listening
+                                ? 'Waiting for input...'
+                                : `Detected: ${getFriendlyButtonName(detectedButton || '')}`
+                        }
+                        color={listening ? 'dim' : 'green'}
+                    />
+                )}
+                <div className="gp-row justify-end">
+                    <Button label="CANCEL" onClick={onCancel} />
+                    {phase === 'confirm' ? (
+                        <>
+                            <Button label="RESET" onClick={handleReset} />
+                            <Button label="SAVE" primary onClick={handleConfirm} />
+                        </>
+                    ) : (
+                        <Button
+                            label="SKIP"
+                            onClick={() => {
+                                if (phase === 'left') setPhase('right');
+                                else if (phase === 'right') setPhase('jump');
+                                else if (phase === 'jump') setPhase('confirm');
+                            }}
+                        />
+                    )}
+                </div>
             </div>
-        </div>
+        </Dialog>
     );
 }

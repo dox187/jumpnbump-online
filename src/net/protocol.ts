@@ -45,6 +45,8 @@ export type RoomMember = {
 };
 
 export type MatchResult = {
+    /** The id of the match this is the result of. */
+    match: string;
     reason: MatchEndReason;
     endScore: number;
     level: string;

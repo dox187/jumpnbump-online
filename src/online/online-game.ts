@@ -37,6 +37,7 @@ import {
 } from '../sdl/sound';
 import { INPUT_LEFT, INPUT_RIGHT, INPUT_UP, SimState } from '../sim/sim';
 import type { Pob } from '../assets';
+import { CAPS_TOP, TextColor, fit_text, font_ready, init_font, render_text } from '../web/pixel/font';
 
 export type OnlineGameOptions = {
     canvas: HTMLCanvasElement;
@@ -59,6 +60,28 @@ export type OnlineGameOptions = {
 export type OnlineGamePhase = 'loading' | 'waiting' | 'playing' | 'ending' | 'scores';
 
 const BUNNY_LABELS = ['DOTT', 'JIFFY', 'FIZZ', 'MIJJI'];
+/** The level is 22 tiles wide; the score column fills the rest of the screen. */
+const PLAYFIELD_WIDTH = 352;
+const NAME_TAG_WIDTH = 80;
+const SCORE_NAME_WIDTH = 56;
+
+/** A player name drawn in the game font, with the rows its visible pixels occupy. */
+type NameTag = { canvas: HTMLCanvasElement; top: number; bottom: number };
+
+function name_tag(text: string, width: number, color: TextColor): NameTag {
+    const canvas = render_text(fit_text(text, width), color, true);
+    const { data } = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height);
+    let top = canvas.height;
+    let bottom = 0;
+    for (let y = 0; y < canvas.height; y++) {
+        for (let x = 0; x < canvas.width; x++) {
+            if (!data[(y * canvas.width + x) * 4 + 3]) continue;
+            top = Math.min(top, y);
+            bottom = Math.max(bottom, y);
+        }
+    }
+    return { canvas, top: Math.min(top, bottom), bottom };
+}
 
 export class OnlineGame {
     phase: OnlineGamePhase = 'loading';
@@ -80,6 +103,10 @@ export class OnlineGame {
     private queued: ServerMessage[] = [];
     private last_render_frame = -1;
     private last_render_time = 0;
+    private screen: CanvasRenderingContext2D | null = null;
+    /** Per bunny slot: the name above the bunny and the name on the score screen. */
+    private name_tags: (NameTag | null)[] = [];
+    private score_tags: (NameTag | null)[] = [];
 
     constructor(options: OnlineGameOptions) {
         this.options = options;
@@ -106,6 +133,9 @@ export class OnlineGame {
         ctx.controls = controls;
 
         init_program(canvas, options.dat, this.pal);
+        this.screen = canvas.getContext('2d');
+        if (!font_ready()) init_font(get_gob('font'));
+        this.make_name_tags(options.match.slots.map((s) => s?.name ?? null));
         set_ai_hotkeys_enabled(false);
         init_level_scene(this.pal);
         if (!options.noflies) position_flies();
@@ -129,7 +159,10 @@ export class OnlineGame {
             this.queued.push(message);
             return;
         }
-        if (message.t === 'over') this.result = message.result;
+        if (message.t === 'over') {
+            this.result = message.result;
+            this.make_name_tags(message.result.names);
+        }
         this.session.handle_message(message);
     }
 
@@ -170,6 +203,45 @@ export class OnlineGame {
 
         this.set_phase('playing');
         this.frame_request = requestAnimationFrame(this.loop);
+    }
+
+    private make_name_tags(names: (string | null)[]) {
+        for (let i = 0; i < JNB_MAX_PLAYERS; i++) {
+            const name = names[i];
+            const color: TextColor = i === this.options.slot ? 'gold' : 'white';
+            this.name_tags[i] = name ? name_tag(name, NAME_TAG_WIDTH, color) : null;
+            this.score_tags[i] = name ? name_tag(name, SCORE_NAME_WIDTH, color) : null;
+        }
+    }
+
+    /** How far the palette has faded in (0-1); the names drawn over the screen follow it. */
+    private brightness() {
+        let current = 0;
+        let target = 0;
+        for (let i = 0; i < 768; i++) {
+            current += this.cur_pal[i];
+            target += this.pal[i];
+        }
+        return target ? Math.min(1, current / target) : 1;
+    }
+
+    private draw_name_tags(state: SimState) {
+        if (!this.screen) return;
+        const alpha = this.brightness();
+        if (alpha <= 0) return;
+        this.screen.globalAlpha = alpha;
+        for (let i = 0; i < JNB_MAX_PLAYERS; i++) {
+            const player = state.player[i];
+            const tag = this.name_tags[i];
+            if (!player.enabled || !tag) continue;
+            const width = tag.canvas.width;
+            const height = tag.bottom - tag.top + 1;
+            // Centred over the bunny and kept on screen, so a bunny above the top edge can still be found
+            const x = Math.max(0, Math.min(PLAYFIELD_WIDTH - width, (player.x >> 16) + 8 - (width >> 1)));
+            const top = Math.max(0, (player.y >> 16) - 2 - height);
+            this.screen.drawImage(tag.canvas, x, top - tag.top);
+        }
+        this.screen.globalAlpha = 1;
     }
 
     private set_phase(phase: OnlineGamePhase) {
@@ -273,6 +345,7 @@ export class OnlineGame {
         for (let i = 0; i < JNB_MAX_PLAYERS; i++) if (state.player[i].enabled) show_score(i, state.player[i].bumps);
         draw_score();
         draw_end();
+        this.draw_name_tags(state);
     }
 
     /** The original fades the palette and the music out once the end score is reached. */
@@ -368,7 +441,9 @@ export class OnlineGame {
         draw_begin();
         draw_pobs();
 
+        // Bunnies nobody played keep their names; the players' names are drawn over the screen below
         for (let c1 = 0; c1 < JNB_MAX_PLAYERS; c1++) {
+            if (this.score_tags[c1]) continue;
             put_text(main_info.view_page, 100 + c1 * 60, 50, BUNNY_LABELS[c1], 2);
             put_text(main_info.view_page, 40, 80 + c1 * 30, BUNNY_LABELS[c1], 2);
         }
@@ -383,5 +458,19 @@ export class OnlineGame {
         }
         put_text(main_info.view_page, 200, 230, 'Press ESC to continue', 2);
         draw_end();
+
+        const alpha = this.brightness();
+        if (!this.screen || alpha <= 0) return;
+        this.screen.globalAlpha = alpha;
+        for (let c1 = 0; c1 < JNB_MAX_PLAYERS; c1++) {
+            const tag = this.score_tags[c1];
+            if (!tag) continue;
+            // Column heads centred like the original labels, row names right-aligned next to the bunnies;
+            // put_text places the top of the capitals at y
+            const width = tag.canvas.width;
+            this.screen.drawImage(tag.canvas, 100 + c1 * 60 - Math.floor(width / 2), 50 - CAPS_TOP);
+            this.screen.drawImage(tag.canvas, 56 - width, 80 + c1 * 30 - CAPS_TOP);
+        }
+        this.screen.globalAlpha = 1;
     }
 }

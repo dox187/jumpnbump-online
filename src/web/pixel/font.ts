@@ -9,6 +9,8 @@ import type { Gob } from '../../assets';
 
 /** Rows above the cap height that accents may use. */
 const TOP = 2;
+/** The row where capital letters start in a canvas from render_text. */
+export const CAPS_TOP = TOP;
 /** Height of a line in game pixels: accents, caps, x-height and descenders. */
 export const LINE_HEIGHT = 15;
 const SPACE_WIDTH = 4;

@@ -280,6 +280,10 @@ async function game_loop() {
     return 0;
 }
 
+function game_stopped() {
+    return ctx.state === 'stopped';
+}
+
 async function menu_loop() {
     const player = ctx.player;
     let mod_vol;
@@ -303,6 +307,8 @@ async function menu_loop() {
                 break;
             }
         }
+        // The page stopped the game (the player left it); every frame loop now returns at once
+        if (game_stopped()) return 0;
         if (key_pressed(KEY.ESCAPE)) {
             return 0;
         }
@@ -328,6 +334,11 @@ async function menu_loop() {
         main_info.page_info.num_pobs = 0;
 
         await game_loop();
+        if (game_stopped()) {
+            dj_stop_sfx_channel(4);
+            deinit_level();
+            return 0;
+        }
 
         if (is_net) {
             if (is_server) {
@@ -468,6 +479,7 @@ export type MainOptions = {
     dat: ArrayBuffer;
     nosound?: boolean;
     musicnosound?: boolean;
+    nomusic?: boolean;
     nogore?: boolean;
     noflies?: boolean;
     controls?: GameInputDevice[];
@@ -478,6 +490,7 @@ export async function main(canvas: HTMLCanvasElement, options: MainOptions): Pro
     main_info.no_gore = options.nogore || false;
     main_info.no_sound = options.nosound || false;
     main_info.music_no_sound = options.musicnosound || false;
+    main_info.no_music = options.nomusic || false;
 
     if (options.controls && options.controls.length === JNB_MAX_PLAYERS) {
         // Override default controls

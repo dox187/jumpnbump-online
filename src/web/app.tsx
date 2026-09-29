@@ -1,14 +1,27 @@
-import { hydrate, lazy, prerender as ssr, LocationProvider, ErrorBoundary, Router, Route } from 'preact-iso';
+import { useEffect } from 'preact/hooks';
+import {
+    hydrate,
+    lazy,
+    prerender as ssr,
+    LocationProvider,
+    ErrorBoundary,
+    Router,
+    Route,
+    useLocation,
+} from 'preact-iso';
 import { PageMeta } from './hooks/page-meta';
 
 import './app.css';
 
-const About = lazy(() => import('./pages/about'));
-const Levels = lazy(() => import('./pages/levels'));
+const Local = lazy(() => import('./pages/local'));
 const Online = lazy(() => import('./pages/online'));
-const Play = lazy(() => import('./pages/play'));
-const Secrets = lazy(() => import('./pages/secrets'));
-const NotFound = () => <div>404 - Not Found</div>;
+
+/** Unknown addresses, including the pages of the old website, lead to the start page. */
+function NotFound() {
+    const { route } = useLocation();
+    useEffect(() => route('/', true), []);
+    return null;
+}
 
 function App() {
     return (
@@ -16,10 +29,7 @@ function App() {
             <ErrorBoundary>
                 <Router>
                     <Route path="/" component={Online} />
-                    <Route path="/local" component={Play} />
-                    <Route path="/levels/:page?" component={Levels} />
-                    <Route path="/about" component={About} />
-                    <Route path="/secrets" component={Secrets} />
+                    <Route path="/local" component={Local} />
                     <Route default component={NotFound} />
                 </Router>
             </ErrorBoundary>
@@ -34,42 +44,7 @@ if (typeof window !== 'undefined') {
 function getHeadElements(meta: PageMeta) {
     return [
         { type: 'meta', props: { name: 'description', content: meta.description } },
-        { type: 'meta', props: { name: 'keywords', content: meta.keywords?.join(', ') } },
-
-        // Open Graph tags
-        { type: 'meta', props: { property: 'og:title', content: meta.ogTitle || meta.title } },
-        { type: 'meta', props: { property: 'og:description', content: meta.ogDescription } },
-        { type: 'meta', props: { property: 'og:type', content: meta.ogType || 'website' } },
-        { type: 'meta', props: { property: 'og:url', content: meta.ogUrl } },
-        { type: 'meta', props: { property: 'og:image', content: meta.ogImage || 'https://jumpnbump.net/jump-og.jpg' } },
-
-        // Twitter Card tags
-        { type: 'meta', props: { name: 'twitter:card', content: 'summary_large_image' } },
-        { type: 'meta', props: { name: 'twitter:title', content: meta.ogTitle || meta.title } },
-        { type: 'meta', props: { name: 'twitter:description', content: meta.ogDescription } },
-        {
-            type: 'meta',
-            props: { name: 'twitter:image', content: meta.ogImage || 'https://jumpnbump.net/jump-og.jpg' },
-        },
-
-        // Canonical URL
-        ...(meta.canonical ? [{ type: 'link', props: { rel: 'canonical', href: meta.canonical } }] : []),
-
-        // Optional robots meta
         ...(meta.robots ? [{ type: 'meta', props: { name: 'robots', content: meta.robots } }] : []),
-
-        // Structured data
-        ...(meta.structuredData
-            ? [
-                  {
-                      type: 'script',
-                      props: {
-                          type: 'application/ld+json',
-                          textContent: JSON.stringify(meta.structuredData),
-                      },
-                  },
-              ]
-            : []),
     ];
 }
 
