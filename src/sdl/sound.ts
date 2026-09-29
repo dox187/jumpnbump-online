@@ -162,10 +162,22 @@ export function dj_load_sfx(filename: string, sfx_num: SFX) {
     sounds[sfx_num] = dest.buffer;
 }
 
+/** The MOD player needs an AudioWorklet, which browsers only offer on HTTPS pages and on localhost. */
+export function music_supported() {
+    return typeof window !== 'undefined' && window.isSecureContext && typeof AudioWorkletNode !== 'undefined';
+}
+
 export function dj_load_mod(filename: string, mod_num: MOD) {
+    if (!music_supported()) {
+        // Play on without music; the sound effects do not need the worklet
+        return;
+    }
     const src = read_data(filename);
-    const mod = new Mod({ src, audioWorkletUrl, wasmUrl });
-    tracks[mod_num] = mod;
+    try {
+        tracks[mod_num] = new Mod({ src, audioWorkletUrl, wasmUrl });
+    } catch (e) {
+        console.info('Music is not available in this browser:', e);
+    }
 }
 
 function handleUserGesture(event: Event) {

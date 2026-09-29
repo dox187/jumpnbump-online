@@ -329,6 +329,8 @@ function ControlSettings({
         gamepads.map((g) => ({ id: getGamepadId(g), name: getFriendlyGamepadName(g) }))
     );
     const selectedGamepad = gamepads.find((g) => getGamepadId(g) === settings.control);
+    const [musicAvailable, setMusicAvailable] = useState(true);
+    useEffect(() => setMusicAvailable(window.isSecureContext && typeof AudioWorkletNode !== 'undefined'), []);
     const known = options.some((o) => o.id === settings.control);
 
     return (
@@ -356,6 +358,11 @@ function ControlSettings({
                 )}
             </div>
             <p className="text-xs">Connect a gamepad and press a button on it to see it in the list.</p>
+            {!musicAvailable && (
+                <p className="text-xs">
+                    Music needs an HTTPS address (or localhost); over plain HTTP only the sound effects play.
+                </p>
+            )}
             {[
                 ['muteMusic', 'Mute music'],
                 ['muteEffects', 'Mute sound effects'],

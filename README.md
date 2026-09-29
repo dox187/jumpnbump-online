@@ -94,6 +94,9 @@ Rooms and matches live in memory; restarting the server closes them.
 
 ### HTTPS and reverse proxies
 
+Browsers only allow the music player (an AudioWorklet) on HTTPS pages and on `localhost`. Over plain HTTP, for
+example `http://192.168.1.10:8080`, the game works but only the sound effects play.
+
 Room passwords travel over the WebSocket, so put the server behind HTTPS when it is reachable from the internet.
 The page connects to `wss://<host>/ws` automatically when it is served over HTTPS. The proxy has to pass WebSocket
 upgrades on `/ws`.
