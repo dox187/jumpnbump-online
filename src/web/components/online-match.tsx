@@ -3,6 +3,9 @@ import { net } from '../../net/client';
 import { BUNNY_NAMES, MatchInfo } from '../../net/protocol';
 import type { GameInputDevice } from '../../inputs';
 import type { OnlineGame, OnlineGamePhase } from '../../online/online-game';
+import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../../constants';
+import { Button, Panel, Text, gp, pixel_variables, usePixelScale } from '../pixel/components';
+import '../pixel/pixel.css';
 
 export type MatchSettings = {
     control: GameInputDevice;
@@ -13,6 +16,7 @@ export type MatchSettings = {
 };
 
 const ESC_CONFIRM_MS = 3000;
+const LEGEND_MS = 6000;
 
 export default function OnlineMatch({
     match,
@@ -113,68 +117,118 @@ export default function OnlineMatch({
         };
     }, [match.id]);
 
-    const players = match.slots
-        .map((s, i) => (s ? { bunny: BUNNY_NAMES[i], name: s.name, me: s.id === myId } : null))
-        .filter(Boolean);
+    // Show who is who for a few seconds when the match starts, and while TAB is held
+    const [legendUntil, setLegendUntil] = useState(0);
+    const [tabHeld, setTabHeld] = useState(false);
+    useEffect(() => {
+        if (phase === 'playing') setLegendUntil(performance.now() + LEGEND_MS);
+    }, [phase === 'playing']);
+    useEffect(() => {
+        if (!legendUntil) return;
+        const timer = setTimeout(() => setLegendUntil(0), Math.max(0, legendUntil - performance.now()));
+        return () => clearTimeout(timer);
+    }, [legendUntil]);
+    useEffect(() => {
+        const down = (e: KeyboardEvent) => e.key === 'Tab' && setTabHeld(true);
+        const up = (e: KeyboardEvent) => e.key === 'Tab' && setTabHeld(false);
+        const blur = () => setTabHeld(false);
+        window.addEventListener('keydown', down);
+        window.addEventListener('keyup', up);
+        window.addEventListener('blur', blur);
+        return () => {
+            window.removeEventListener('keydown', down);
+            window.removeEventListener('keyup', up);
+            window.removeEventListener('blur', blur);
+        };
+    }, []);
+
+    const scale = usePixelScale(SCREEN_WIDTH, SCREEN_HEIGHT);
+    const waiting = phase === 'loading' || phase === 'waiting' || failed !== null;
+    const showLegend = phase === 'playing' && (legendUntil > 0 || tabHeld);
+    const myBunny = slot >= 0 ? BUNNY_NAMES[slot] : null;
 
     return (
-        <div className="h-screen w-screen bg-black relative overflow-hidden select-none">
-            <div className="absolute top-0 left-0 right-0 z-10 flex flex-wrap justify-center gap-x-4 gap-y-1 px-2 py-0.5 text-xs text-white/80 bg-black/50 pointer-events-none">
-                {players.map((p) => (
-                    <span key={p!.bunny} className={p!.me ? 'text-white font-bold' : ''}>
-                        {p!.bunny}: {p!.name}
-                        {p!.me ? ' (you)' : ''}
-                    </span>
-                ))}
-                {ping !== null && phase === 'playing' && <span className="text-white/50">ping {ping} ms</span>}
-                {phase === 'playing' && (
-                    <span className="text-white/50">
-                        ESC: {isHost ? 'end match' : 'leave match'} · SHIFT+F: fullscreen
-                    </span>
+        <div className="gp-root" style={pixel_variables(scale)}>
+            <div className="gp-stage" style={{ width: gp(SCREEN_WIDTH), height: gp(SCREEN_HEIGHT) }}>
+                <canvas
+                    ref={canvasRef}
+                    className="gp-abs"
+                    style={{
+                        left: 0,
+                        top: 0,
+                        width: gp(SCREEN_WIDTH),
+                        height: gp(SCREEN_HEIGHT),
+                        visibility: waiting ? 'hidden' : 'visible',
+                    }}
+                />
+
+                {showLegend && (
+                    <div
+                        className="gp-abs"
+                        style={{ left: 0, right: gp(48), top: gp(8), display: 'flex', justifyContent: 'center' }}
+                    >
+                        <Panel className="gp-col" style={{ alignItems: 'center', gap: 0 }}>
+                            {myBunny && <Text text={`You are ${myBunny.toUpperCase()}`} color="gold" />}
+                            <div className="gp-row" style={{ gap: gp(8) }}>
+                                {match.slots.map((s, i) =>
+                                    s ? (
+                                        <Text
+                                            key={i}
+                                            text={`${BUNNY_NAMES[i]}: ${s.name}`}
+                                            color={s.id === myId ? 'gold' : 'white'}
+                                            maxWidth={90}
+                                        />
+                                    ) : null
+                                )}
+                            </div>
+                            <Text
+                                text={`ping ${ping ?? '-'} ms - TAB: players - ESC twice: ${isHost ? 'end match' : 'leave'}`}
+                                color="dim"
+                            />
+                        </Panel>
+                    </div>
+                )}
+
+                {(notice || (stalled && phase === 'playing')) && (
+                    <div
+                        className="gp-abs"
+                        style={{ left: 0, right: gp(48), top: gp(110), display: 'flex', justifyContent: 'center' }}
+                    >
+                        <Panel>
+                            <Text
+                                text={notice ?? 'Connection problem: waiting for the server...'}
+                                color={notice ? 'gold' : 'red'}
+                            />
+                        </Panel>
+                    </div>
+                )}
+
+                {waiting && (
+                    <div
+                        className="gp-abs"
+                        style={{ inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                        <Panel className="gp-col" style={{ alignItems: 'center', width: gp(220) }}>
+                            <Text
+                                text={
+                                    failed ??
+                                    (phase === 'loading' ? 'LOADING LEVEL...' : 'WAITING FOR THE OTHER BUNNIES...')
+                                }
+                                color={failed ? 'red' : 'gold'}
+                            />
+                            {myBunny && !failed && <Text text={`You play ${myBunny}.`} color="white" />}
+                            {!failed && <Text text="SHIFT+F: fullscreen" color="dim" />}
+                            <Button label={isHost && !failed ? 'CANCEL MATCH' : 'BACK TO THE ROOM'} onClick={quit} />
+                        </Panel>
+                    </div>
+                )}
+
+                {phase === 'scores' && (
+                    <div className="gp-abs" style={{ right: gp(6), bottom: gp(4) }}>
+                        <Button label="CONTINUE" primary onClick={() => gameRef.current?.dismiss_scores()} />
+                    </div>
                 )}
             </div>
-
-            {stalled && phase === 'playing' && !notice && (
-                <div className="absolute top-8 left-1/2 -translate-x-1/2 z-10 bg-black/80 text-white text-sm font-bold px-3 py-1 border-1 border-white/40">
-                    Connection problem: waiting for the server...
-                </div>
-            )}
-
-            {notice && (
-                <div className="absolute top-8 left-1/2 -translate-x-1/2 z-10 bg-black/80 text-white text-sm font-bold px-3 py-1 border-1 border-white/40">
-                    {notice}
-                </div>
-            )}
-
-            {(phase === 'loading' || phase === 'waiting' || failed) && (
-                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 text-white">
-                    <div className="text-2xl font-bold">
-                        {failed ?? (phase === 'loading' ? 'Loading level...' : 'Waiting for the other bunnies...')}
-                    </div>
-                    <button
-                        className="bg-brainchild-primary hover:bg-brainchild-primary-hover border-1 border-black text-black text-sm font-bold px-3 py-1 cursor-pointer"
-                        onClick={quit}
-                    >
-                        {isHost && !failed ? 'Cancel match' : 'Back to the room'}
-                    </button>
-                </div>
-            )}
-
-            {phase === 'scores' && (
-                <div className="absolute bottom-4 left-0 right-0 z-10 flex justify-center">
-                    <button
-                        className="bg-brainchild-primary hover:bg-brainchild-primary-hover border-1 border-black text-black text-sm font-bold px-3 py-1 cursor-pointer"
-                        onClick={() => gameRef.current?.dismiss_scores()}
-                    >
-                        Continue
-                    </button>
-                </div>
-            )}
-
-            <canvas
-                className={`game-canvas ${phase === 'loading' || phase === 'waiting' ? 'game-canvas-loading' : ''}`}
-                ref={canvasRef}
-            ></canvas>
         </div>
     );
 }

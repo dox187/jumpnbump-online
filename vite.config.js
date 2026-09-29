@@ -17,6 +17,8 @@ export default defineConfig({
             prerender: {
                 enabled: true,
                 renderTarget: '#app',
+                // The online start page is drawn client-side, so the crawler cannot find links on it
+                additionalPrerenderRoutes: ['/local', '/levels', '/about', '/secrets'],
             },
         }),
         tailwindcss(),

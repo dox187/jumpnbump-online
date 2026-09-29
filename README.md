@@ -129,13 +129,17 @@ published ports through the host's address.
 ## Playing online
 
 1. Open the site and enter a name.
-2. Create a room (the password is optional) or join one from the list.
-3. Copy the invite link from the room and send it to your friends. For a protected room they also need the
+2. Make a room with **NEW ROOM** (the password is optional) or click a room in the list to join it.
+3. Press **INVITE** to copy the invite link and send it to your friends. For a protected room they also need the
    password.
-4. Pick your bunny by clicking a free slot. The host chooses the level and the score limit and starts the match.
-5. In a match, move with the keys or the gamepad chosen under **Your Settings** (arrow keys by default).
-   **SHIFT + F** toggles fullscreen. Pressing **ESC** twice leaves the match; for the host it ends the match for
-   everyone.
+4. Click a free bunny in the forest to play as it. The host chooses the level and the score limit and presses
+   **START MATCH**.
+5. In a match, move with the keys or the gamepad chosen under **OPTIONS** (arrow keys by default). Hold **TAB** to
+   see who plays which bunny, **SHIFT + F** toggles fullscreen. Pressing **ESC** twice leaves the match; for the
+   host it ends the match for everyone.
+
+The online pages are drawn with the game's own graphics: the menu forest, the bitmap font (with added Hungarian
+accents and a few missing symbols) and the bunny sprites, on an integer-scaled pixel grid.
 
 Cheats and the 1-4 computer-player keys are disabled online, and each browser controls one bunny.
 
