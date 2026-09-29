@@ -11,6 +11,8 @@
 services:
   jumpnbump-online:
     image: localhost/jumpnbump-online:latest
+    # The image only exists on this host; never try to pull it from a registry
+    pull_policy: never
     container_name: jumpnbump-online
     init: true
     ports:
