@@ -121,7 +121,10 @@ location / {
 }
 ```
 
-In Nginx Proxy Manager, enable **Websockets Support** on the proxy host.
+In Nginx Proxy Manager, enable **Websockets Support** on the proxy host. When the proxy runs in a container, put
+the game on the proxy's network (see the `networks` section of [`portainer-stack.yml`](portainer-stack.yml)) and
+forward to `http://jumpnbump-online:8080`; under Podman a proxy container often cannot reach another network's
+published ports through the host's address.
 
 ## Playing online
 
