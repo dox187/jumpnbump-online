@@ -40,7 +40,8 @@ import {
     gp,
 } from '../pixel/components';
 import { TextColor, text_width } from '../pixel/font';
-import { BUNNY_SPOTS, SCENE_X, SCENE_Y, Scene, SceneBunny } from '../pixel/scene';
+import { BUNNY_SPOTS, SCENE_X, SCENE_Y, Scene, SceneBunny, SceneOwnBunny } from '../pixel/scene';
+import { InputTracker, is_text_field, read_input_mask, track_input } from '../pixel/hop';
 import '../pixel/pixel.css';
 
 const OnlineMatch = lazy(() => import('../components/online-match'));
@@ -709,41 +710,26 @@ function Room({
 
             {BUNNY_NAMES.map((bunny, slot) => {
                 const member = room.members.find((m) => m.slot === slot);
+                // Players' bunnies hop around; the name tags are drawn on the scene (see roomBunnies)
+                if (member)
+                    return (
+                        <span key={bunny} className="sr-only">
+                            {`${bunny}: ${member.name}${member.host ? ' (host)' : ''}${member.id === myId ? ' (you)' : ''}`}
+                        </span>
+                    );
                 const spot = BUNNY_SPOTS[slot];
-                const canTake = !member && canPick;
-                const mine = member?.id === myId;
+                const canTake = canPick;
                 const hot = hotSlot === slot && canTake;
-                const name = member ? member.name : hot ? `Play as ${bunny}` : bunny;
-                const max = member ? 66 : 74;
-                const width = Math.min(max, text_width(name)) + 6;
-                const color: TextColor = member
-                    ? mine
-                        ? 'gold'
-                        : member.inMatch || canPick
-                          ? 'white'
-                          : 'dim'
-                    : hot
-                      ? 'green'
-                      : 'dim';
+                const name = `Play as ${bunny}`;
+                const width = Math.min(74, text_width(name)) + 6;
                 return (
                     <div key={bunny}>
-                        <At x={spot.x + 8 - Math.ceil(width / 2)} y={spot.y - 19}>
-                            <span className="gp-tag" style={{ width: gp(width) }}>
-                                <Text text={name} color={color} maxWidth={max} />
-                            </span>
-                        </At>
-                        {member?.host && (
-                            <At
-                                x={spot.x + 8 - Math.ceil(width / 2) - 3}
-                                y={spot.y - 24}
-                                className="pointer-events-none"
-                            >
-                                <Icon name="crown" />
-                            </At>
-                        )}
-                        {mine && (
-                            <At x={spot.x + 5} y={spot.y - 27} className="gp-bob pointer-events-none">
-                                <Icon name="down" />
+                        {hot && (
+                            // Opaque, as it covers the free bunny's tag on the scene
+                            <At x={spot.x + 8 - Math.ceil(width / 2)} y={spot.y - 19}>
+                                <span className="gp-tag" style={{ width: gp(width), backgroundColor: '#000' }}>
+                                    <Text text={name} color="green" maxWidth={74} />
+                                </span>
                             </At>
                         )}
                         <button
@@ -751,9 +737,13 @@ function Room({
                             className="gp-slot"
                             style={{ left: gp(spot.x - 2), top: gp(spot.y - 2), width: gp(20), height: gp(20) }}
                             disabled={!canTake}
-                            aria-label={member ? `${bunny}: ${member.name}` : `Play as ${bunny}`}
+                            aria-label={`Play as ${bunny}`}
                             title={canTake ? `Play as ${bunny}` : undefined}
-                            onClick={() => net.send({ t: 'slot', slot })}
+                            onClick={() => {
+                                net.send({ t: 'slot', slot });
+                                // The button goes away once the bunny is yours, without a mouseleave or blur
+                                setHotSlot(null);
+                            }}
                             onMouseEnter={() => setHotSlot(slot)}
                             onMouseLeave={() => setHotSlot(null)}
                             onFocus={() => setHotSlot(slot)}
@@ -836,6 +826,57 @@ function Room({
     );
 }
 
+/** A room's bunnies on the scene with their name tags: free slots as ghosts, players' bunnies by name. */
+function roomBunnies(room: RoomDetail, myId: string | undefined): SceneBunny[] {
+    const canPick = room.status === 'lobby';
+    return BUNNY_NAMES.map((bunny, slot) => {
+        const member = room.members.find((m) => m.slot === slot);
+        if (!member) return { slot, ghost: true, tag: { text: bunny, color: 'dim' } };
+        const mine = member.id === myId;
+        const color: TextColor = mine ? 'gold' : member.inMatch || canPick ? 'white' : 'dim';
+        return { slot, tag: { text: member.name, color, crown: member.host, mine } };
+    });
+}
+
+/**
+ * Your bunny in the room (`slot`, null without one) hops around with your controls, like in the local
+ * game's menu; it stands still while a dialog is open or a text field has the focus.
+ */
+function useOwnHop(slot: number | null, device: GameInputDevice): SceneOwnBunny | undefined {
+    const deviceRef = useRef(device);
+    deviceRef.current = device;
+    const tracker = useRef<InputTracker | null>(null);
+    const active = slot !== null;
+
+    useEffect(() => {
+        if (!active) return;
+        const tracking = track_input();
+        tracker.current = tracking;
+        return () => {
+            tracking.dispose();
+            tracker.current = null;
+        };
+    }, [active]);
+
+    return useMemo(() => {
+        if (slot === null) return undefined;
+        return {
+            slot,
+            input: () => {
+                const held = tracker.current;
+                if (!held || document.querySelector('[aria-modal="true"]') || is_text_field(document.activeElement))
+                    return 0;
+                // Some browsers only offer gamepads to secure (HTTPS) pages
+                const gamepads = navigator.getGamepads?.() ?? [];
+                return read_input_mask(deviceRef.current, held.keys, held.mouse_buttons, gamepads);
+            },
+            on_state: () => {
+                // TODO(net): send hop
+            },
+        };
+    }, [slot]);
+}
+
 export default function Online() {
     usePageMeta(onlinePageMeta);
     const state = useNet();
@@ -888,6 +929,11 @@ export default function Online() {
         else net.send({ t: 'join', room: room.id, password: '' });
     }, [state.status, state.rooms]);
 
+    // Only players have a bunny to move (a slot 0-3); nobody hops while a match is shown
+    const mySlot = state.room?.members.find((m) => m.id === state.me?.id)?.slot;
+    const hopSlot = !state.match && typeof mySlot === 'number' && mySlot >= 0 && mySlot < BUNNY_NAMES.length;
+    const ownHop = useOwnHop(hopSlot ? mySlot! : null, deviceFor(settings, gamepads));
+
     if (state.match && state.me) {
         const matchSettings: MatchSettings = {
             control: deviceFor(settings, gamepads),
@@ -919,12 +965,12 @@ export default function Online() {
     const room = state.room;
     const online = state.status === 'online';
     const bunnies: SceneBunny[] = room
-        ? BUNNY_NAMES.map((_, slot) => ({ slot, ghost: !room.members.some((m) => m.slot === slot) }))
+        ? roomBunnies(room, state.me?.id)
         : LOBBY_SPOTS.map((spot, slot) => ({ slot, ...spot }));
 
     return (
         <Stage>
-            <Scene assets={assets} bunnies={bunnies} />
+            <Scene assets={assets} bunnies={bunnies} own={room ? ownHop : undefined} />
 
             {!room && online && (
                 <>
