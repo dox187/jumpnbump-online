@@ -6,6 +6,7 @@ import type { ComponentChildren, JSX } from 'preact';
 import { createContext } from 'preact';
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { LINE_HEIGHT, TextColor, fit_text, render_text, text_width, wrap_text } from './font';
+import { useDialogFocus, useKeyboardNav } from './keyboard-nav';
 
 export const STAGE_WIDTH = 480;
 export const STAGE_HEIGHT = 288;
@@ -143,14 +144,27 @@ export function pixel_variables(scale: number) {
     return { '--px': `${scale}px`, ...frame_variables() } as JSX.CSSProperties;
 }
 
-/** The black screen with the centred, integer-scaled stage. */
-export function Stage({ children }: { children: ComponentChildren }) {
+/**
+ * The black screen with the centred, integer-scaled stage. The arrow keys move the focus between its controls;
+ * `navSkip` returns true for keydown events the navigation must leave alone.
+ */
+export function Stage({
+    children,
+    navSkip,
+}: {
+    children: ComponentChildren;
+    navSkip?: (event: KeyboardEvent) => boolean;
+}) {
     const scale = usePixelScale();
     const style = pixel_variables(scale);
+    const stage = useRef<HTMLDivElement>(null);
+    useKeyboardNav(stage, navSkip);
     return (
         <ScaleContext.Provider value={scale}>
             <div className="gp-root" style={style}>
-                <div className="gp-stage">{children}</div>
+                <div ref={stage} className="gp-stage">
+                    {children}
+                </div>
             </div>
         </ScaleContext.Provider>
     );
@@ -313,7 +327,7 @@ export function Button({
     return (
         <button
             type={type}
-            className={`gp-button ${className}`}
+            className={`gp-button${primary ? ' gp-button-primary' : ''} ${className}`}
             disabled={disabled}
             title={title}
             style={width ? { minWidth: gp(width) } : undefined}
@@ -430,7 +444,16 @@ export function Checkbox({
     );
 }
 
-/** A "< value >" option switcher, like the settings in old games. */
+/**
+ * Clicking a cycler leaves the focus where it was: only the keyboard focuses it, so Left/Right change its value
+ * only after the player moved to it with the keyboard.
+ */
+const keep_focus = (e: MouseEvent) => e.preventDefault();
+
+/**
+ * A "< value >" option switcher, like the settings in old games. For the keyboard it is one focus stop:
+ * Left/Right change the value, Up/Down move on.
+ */
 export function Cycler<T>({
     label,
     value,
@@ -458,15 +481,21 @@ export function Cycler<T>({
             className={`gp-cycler ${disabled ? 'gp-cycler-disabled' : ''}`}
             role="group"
             aria-label={label}
+            tabIndex={disabled ? -1 : 0}
+            onMouseDown={keep_focus}
             onKeyDown={(e) => {
-                if (e.key === 'ArrowLeft') step(-1);
-                if (e.key === 'ArrowRight') step(1);
+                if (e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey) return;
+                const delta = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
+                if (!delta) return;
+                e.preventDefault();
+                step(delta);
             }}
         >
             <button
                 type="button"
                 className="gp-arrow"
                 disabled={disabled}
+                tabIndex={-1}
                 aria-label={`Previous ${label}`}
                 onClick={() => step(-1)}
             >
@@ -479,6 +508,7 @@ export function Cycler<T>({
                 type="button"
                 className="gp-arrow"
                 disabled={disabled}
+                tabIndex={-1}
                 aria-label={`Next ${label}`}
                 onClick={() => step(1)}
             >
@@ -500,6 +530,9 @@ export function Dialog({
     children: ComponentChildren;
     width?: number;
 }) {
+    const panel = useRef<HTMLDivElement>(null);
+    useDialogFocus(panel);
+
     useEffect(() => {
         if (!onClose) return;
         const handler = (e: KeyboardEvent) => {
@@ -515,10 +548,12 @@ export function Dialog({
     return (
         <div className="gp-dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
             <div
+                ref={panel}
                 className="gp-panel gp-dialog"
                 role="dialog"
                 aria-modal="true"
                 aria-label={title}
+                tabIndex={-1}
                 style={{ width: gp(width) }}
             >
                 <div className="gp-dialog-title">

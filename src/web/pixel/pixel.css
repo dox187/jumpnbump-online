@@ -99,9 +99,15 @@
 }
 
 .gp-root button:focus-visible,
-.gp-list-item:focus-visible {
+.gp-root a:focus-visible,
+.gp-root [tabindex='0']:focus-visible {
     outline: var(--px) solid #ffd648;
     outline-offset: var(--px);
+}
+
+/* Dialogs take the focus themselves when opened with the mouse; that needs no highlight */
+.gp-dialog:focus {
+    outline: none;
 }
 
 .gp-input {
@@ -202,7 +208,9 @@
 }
 
 .gp-arrow:hover:not(:disabled) .gp-icon,
-.gp-close:hover .gp-icon {
+.gp-cycler:focus-visible .gp-arrow:not(:disabled) .gp-icon,
+.gp-close:hover .gp-icon,
+.gp-close:focus-visible .gp-icon {
     filter: sepia(1) saturate(6) brightness(1.2);
 }
 
@@ -333,8 +341,66 @@
     cursor: pointer;
 }
 
-.gp-level-card:hover .gp-thumb {
+.gp-level-card:hover .gp-thumb,
+.gp-level-card:focus-visible .gp-thumb {
     border-image-source: var(--gp-frame-input-focus);
+}
+
+/* The level grid; padding and scroll margin keep the focus outline visible, also at the scrolled edge */
+.gp-level-grid {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    align-content: start;
+    gap: calc(var(--px) * 2);
+    padding: calc(var(--px) * 2);
+}
+
+.gp-level-grid > * {
+    scroll-margin: calc(var(--px) * 2);
+}
+
+/* A scrolling box with a wooden scrollbar: a dark groove like the text fields, the thumb like a button */
+
+.gp-scroll {
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.gp-scroll::-webkit-scrollbar {
+    width: calc(var(--px) * 8);
+}
+
+.gp-scroll::-webkit-scrollbar-track {
+    border: calc(var(--px) * 2) solid transparent;
+    border-image: var(--gp-frame-input) 2 / calc(var(--px) * 2) stretch;
+    background: #0c0703;
+    background-clip: padding-box;
+}
+
+.gp-scroll::-webkit-scrollbar-thumb {
+    min-height: calc(var(--px) * 24);
+    border: calc(var(--px) * 3) solid transparent;
+    border-image: var(--gp-frame-button) 3 / calc(var(--px) * 3) stretch;
+    background: #6e4420;
+    background-clip: padding-box;
+}
+
+.gp-scroll::-webkit-scrollbar-thumb:hover {
+    background-color: #8a5a2c;
+}
+
+.gp-scroll::-webkit-scrollbar-button,
+.gp-scroll::-webkit-scrollbar-corner {
+    display: none;
+}
+
+/* Browsers without the scrollbar pseudo-elements (Firefox) get at least the colours */
+@supports not selector(::-webkit-scrollbar) {
+    .gp-scroll {
+        scrollbar-color: #9a6632 #0c0703;
+    }
 }
 
 .gp-table td,
