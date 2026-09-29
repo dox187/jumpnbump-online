@@ -29,11 +29,17 @@ moved into a shared module, and a test comparing the old and new code on every l
 Features of the online mode:
 
 - A lobby with rooms. Rooms can be protected with a password, and each room has an invite link (`/?room=<id>`).
-- Up to four players per room. Everyone plays on their own keyboard or gamepad and picks their bunny (Dott, Jiffy,
-  Fizz or Mijji).
-- The host chooses the level and the score limit (first to 5, 10, 25, 50 or 100 bumps) and starts the match.
-- The players' names above their bunnies and on the classic score screen at the end of a match; the result table
-  stays available in the room under **LAST MATCH**.
+- Up to four players and any spectators (16 people in all) per room. Everyone plays on their own keyboard or
+  gamepad and picks their bunny (Dott, Jiffy, Fizz or Mijji); in the room the players hop around the forest with
+  their bunnies as in the original menu. Names are unique among the people online.
+- Anybody can sit a match out and watch it. People who come in while a match runs, or when all four bunnies are
+  taken, are spectators and watch the running match live.
+- The host chooses the level (from a scrolling list of 250+ levels) and the score limit (first to 5, 10, 25, 50
+  or 100 bumps) and starts the match; it needs at least two players.
+- A 3-2-1 countdown at the start, the players' names on the level's side panel, the last death replayed in slow
+  motion at the end, then the classic score screen with the names; the result table stays available in the room
+  under **LAST MATCH**.
+- All menus work with the keyboard (arrow keys, Enter, Escape) as well as the mouse.
 - Local settings per player: controls, mute music or sound effects, no gore, no flies.
 
 The original local game (up to four players on one keyboard, with computer players) is still available: **Local
@@ -133,11 +139,13 @@ published ports through the host's address.
 2. Make a room with **NEW ROOM** (the password is optional) or click a room in the list to join it.
 3. Press **INVITE** to copy the invite link and send it to your friends. For a protected room they also need the
    password.
-4. Click a free bunny in the forest to play as it. The host chooses the level and the score limit and presses
-   **START MATCH**.
-5. In a match, move with the keys or the gamepad chosen under **OPTIONS** (arrow keys by default). Everyone's name
-   is shown above their bunny; hold **TAB** to see the list of players, **SHIFT + F** toggles fullscreen. Pressing **ESC** twice leaves the match; for the
-   host it ends the match for everyone.
+4. Click a free bunny in the forest to play as it, or **SIT OUT** to only watch. Your bunny hops around with your
+   controls; press **Tab** to move the keyboard into the menu (arrow keys, Enter) and **Escape** to get back to the
+   bunny. The host chooses the level and the score limit and presses **START MATCH**.
+5. In a match, move with the keys or the gamepad chosen under **OPTIONS** (arrow keys by default). The players'
+   names are on the side panel; hold **TAB** to see the list of players, **SHIFT + F** toggles fullscreen. Pressing
+   **ESC** twice leaves the match; for the host it ends the match for everyone. Spectators go back to the room with
+   one **ESC** and can watch again with **WATCH**; the host can also end a match from the room.
 
 The online pages are drawn with the game's own graphics: the menu forest, the bitmap font (with added Hungarian
 accents and a few missing symbols) and the bunny sprites, on an integer-scaled pixel grid.

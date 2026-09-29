@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { lazy } from 'preact-iso';
 import { PageMeta, usePageMeta } from '../hooks/page-meta';
 import { useNet } from '../hooks/net';
@@ -40,8 +40,9 @@ import {
     gp,
 } from '../pixel/components';
 import { TextColor, text_width } from '../pixel/font';
-import { BUNNY_SPOTS, SCENE_X, SCENE_Y, Scene, SceneBunny, SceneOwnBunny } from '../pixel/scene';
+import { BUNNY_SPOTS, RemoteHop, SCENE_X, SCENE_Y, Scene, SceneBunny, SceneOwnBunny } from '../pixel/scene';
 import { InputTracker, is_text_field, read_input_mask, track_input } from '../pixel/hop';
+import { has_keyboard_focus } from '../pixel/keyboard-nav';
 import '../pixel/pixel.css';
 
 const OnlineMatch = lazy(() => import('../components/online-match'));
@@ -64,6 +65,9 @@ const seen_results = new Map<string, string>();
 const ROOMS_PER_PAGE = 8;
 /** Where the bunnies hop about while you are in the lobby (right of the room list). */
 const LOBBY_SPOTS = [286, 326, 366, 406].map((x) => ({ x, y: SCENE_Y + 160 }));
+/** Left edge of the room's level panel on the stage; the bunnies hop only left of it. */
+const LEVEL_PANEL_X = 342;
+const ROOM_HOP_MAX_X = LEVEL_PANEL_X - SCENE_X - 16 - 2;
 
 function levelFor(datFile: string): Level {
     return levels.find((l) => l.datFile === datFile) ?? { name: datFile, datFile, imageUrl: 'jumpbump.jpg' };
@@ -753,7 +757,7 @@ function Room({
                 );
             })}
 
-            <At x={342} y={6}>
+            <At x={LEVEL_PANEL_X} y={6}>
                 <Panel className="gp-col" style={{ width: gp(132), alignItems: 'center' }}>
                     <Text text="LEVEL" color="gold" />
                     <Thumbnail level={level} width={100} height={64} />
@@ -864,15 +868,15 @@ function useOwnHop(slot: number | null, device: GameInputDevice): SceneOwnBunny 
             slot,
             input: () => {
                 const held = tracker.current;
-                if (!held || document.querySelector('[aria-modal="true"]') || is_text_field(document.activeElement))
-                    return 0;
+                // Dialogs, text fields and menu controls reached with the keyboard keep the keys for themselves
+                if (!held || has_keyboard_focus() || is_text_field(document.activeElement)) return 0;
                 // Some browsers only offer gamepads to secure (HTTPS) pages
                 const gamepads = navigator.getGamepads?.() ?? [];
                 return read_input_mask(deviceRef.current, held.keys, held.mouse_buttons, gamepads);
             },
-            on_state: () => {
-                // TODO(net): send hop
-            },
+            on_state: (sample) => net.send({ t: 'hop', s: sample }),
+            // The level panel covers the right end of the forest
+            max_x: ROOM_HOP_MAX_X,
         };
     }, [slot]);
 }
@@ -934,6 +938,29 @@ export default function Online() {
     const hopSlot = !state.match && typeof mySlot === 'number' && mySlot >= 0 && mySlot < BUNNY_NAMES.length;
     const ownHop = useOwnHop(hopSlot ? mySlot! : null, deviceFor(settings, gamepads));
 
+    // The other players' bunnies, from the hop samples the server relays
+    const netRef = useRef(state);
+    netRef.current = state;
+    const remoteHops = useMemo(
+        () => () => {
+            const hops = new Map<number, RemoteHop[]>();
+            const { room, me } = netRef.current;
+            for (const member of room?.members ?? []) {
+                if (member.slot === null || member.id === me?.id) continue;
+                const track = net.hops.get(member.id);
+                if (track) hops.set(member.slot, track);
+            }
+            return hops;
+        },
+        []
+    );
+    // While your bunny hops, its keys steer it instead of the menu, until a control has the keyboard focus
+    const navSkip = (event: KeyboardEvent) => {
+        if (!ownHop || has_keyboard_focus()) return false;
+        const device = deviceFor(settings, gamepads);
+        return device.type === 'keyboard' && device.mappings.includes(event.code);
+    };
+
     if (state.match && state.me) {
         const matchSettings: MatchSettings = {
             control: deviceFor(settings, gamepads),
@@ -969,8 +996,13 @@ export default function Online() {
         : LOBBY_SPOTS.map((spot, slot) => ({ slot, ...spot }));
 
     return (
-        <Stage>
-            <Scene assets={assets} bunnies={bunnies} own={room ? ownHop : undefined} />
+        <Stage navSkip={navSkip}>
+            <Scene
+                assets={assets}
+                bunnies={bunnies}
+                own={room ? ownHop : undefined}
+                remote={room ? remoteHops : undefined}
+            />
 
             {!room && online && (
                 <>

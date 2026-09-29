@@ -188,8 +188,9 @@ export default function OnlineMatch({
                                 )}
                             </div>
                             <Text
-                                text={`ping ${ping ?? '-'} ms - TAB: players - ESC${spectating ? '' : ' twice'}: ${escHint}`}
+                                text={`ESC${spectating ? '' : ' twice'}: ${escHint} - TAB: players - ping ${ping ?? '-'} ms`}
                                 color="dim"
+                                maxWidth={300}
                             />
                         </Panel>
                     </div>

@@ -38,6 +38,7 @@ const rnd = (max: number) => Math.floor(Math.random() * max);
 export class HopBunny {
     readonly slot: number;
     private effects: HopEffects | null;
+    private readonly max_x: number;
     private _x = 0;
     private _y = 0;
     private x_add = 0;
@@ -52,9 +53,11 @@ export class HopBunny {
     private action_right = false;
     private action_up = false;
 
-    constructor(slot: number, effects: HopEffects | null = null) {
+    /** `max_x` is the right wall (menu pixels), e.g. to keep the bunny out from under a panel. */
+    constructor(slot: number, effects: HopEffects | null = null, max_x = HOP_MAX_X) {
         this.slot = slot;
         this.effects = effects;
+        this.max_x = Math.min(HOP_MAX_X, max_x);
         this.reset();
     }
 
@@ -245,8 +248,8 @@ export class HopBunny {
             p.x_add = 0;
         }
         // The menu started the game here once a bunny ran past the right edge; online it is a wall
-        if (p._x >> 16 > HOP_MAX_X) {
-            p._x = HOP_MAX_X << 16;
+        if (p._x >> 16 > p.max_x) {
+            p._x = p.max_x << 16;
             p.x_add = 0;
         }
         if (p._y >> 16 > 138 + c1 * 2) {

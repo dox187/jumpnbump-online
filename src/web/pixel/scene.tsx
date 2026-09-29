@@ -60,6 +60,8 @@ export type SceneOwnBunny = {
     input: () => number;
     /** Called when the bunny moved (at most 20 times a second) and at least once a second. */
     on_state: (sample: HopSample) => void;
+    /** The right wall in menu pixels (default: the screen edge). */
+    max_x?: number;
 };
 
 type BunnyState = {
@@ -287,7 +289,7 @@ export function Scene({
             const own = own_ref.current;
             if ((own?.slot ?? -1) !== (hop?.slot ?? -1)) {
                 // A new bunny starts at its spot; the one you had stands at its own spot again
-                hop = own ? new HopBunny(own.slot) : null;
+                hop = own ? new HopBunny(own.slot, null, own.max_x) : null;
                 sent = null;
                 since_sent = SEND_TICKS;
             }
