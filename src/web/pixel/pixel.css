@@ -364,3 +364,30 @@
         opacity: 0;
     }
 }
+
+/* Match overlays: the countdown numbers pop in, the replay label blinks */
+
+@keyframes gp-pop {
+    from {
+        transform: scale(1.6);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.gp-pop {
+    animation: gp-pop 0.25s steps(5) both;
+}
+
+@keyframes gp-blink {
+    50% {
+        opacity: 0;
+    }
+}
+
+.gp-blink {
+    animation: gp-blink 1s steps(1) infinite;
+}

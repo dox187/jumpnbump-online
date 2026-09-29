@@ -12,7 +12,9 @@ import { net, NetState } from '../../net/client';
 import {
     BUNNY_NAMES,
     END_SCORE_OPTIONS,
+    MAX_ROOM_MEMBERS,
     MAX_ROOM_PLAYERS,
+    MIN_MATCH_PLAYERS,
     MatchResult,
     NAME_MAX_LENGTH,
     PASSWORD_MAX_LENGTH,
@@ -178,11 +180,13 @@ function ToastView({ toast, onDismiss }: { toast: Toast | null; onDismiss: () =>
 function NameDialog({
     initial,
     title,
+    note = 'The other bunnies will see this name.',
     onSubmit,
     onClose,
 }: {
     initial: string;
     title: string;
+    note?: string;
     onSubmit: (name: string) => void;
     onClose?: () => void;
 }) {
@@ -197,7 +201,7 @@ function NameDialog({
                     if (trimmed) onSubmit(trimmed);
                 }}
             >
-                <Paragraph text="The other bunnies will see this name." width={184} />
+                <Paragraph text={note} width={184} />
                 <TextInput
                     value={name}
                     onInput={setName}
@@ -359,14 +363,17 @@ function Lobby({
                             </div>
                         )}
                         {shown.map((room) => {
-                            const full = room.players >= MAX_ROOM_PLAYERS;
+                            const full = room.members >= MAX_ROOM_MEMBERS;
+                            const watchers = room.members - room.players;
                             return (
                                 <button
                                     key={room.id}
                                     type="button"
                                     className="gp-list-item"
                                     disabled={full}
-                                    title={`${room.name} - ${room.level}${full ? ' (full)' : ''}`}
+                                    title={`${room.name} - ${room.level}${full ? ' (full)' : ''}${
+                                        watchers > 0 ? ` - ${watchers} watching` : ''
+                                    }`}
                                     onClick={() => join(room)}
                                 >
                                     <span style={{ width: gp(7), display: 'inline-flex' }}>
@@ -381,7 +388,9 @@ function Lobby({
                                         ) : (
                                             <Text
                                                 text={`${room.players}/${MAX_ROOM_PLAYERS}`}
-                                                color={full ? 'dim' : 'green'}
+                                                color={
+                                                    full ? 'dim' : room.players < MAX_ROOM_PLAYERS ? 'green' : 'wood'
+                                                }
                                             />
                                         )}
                                     </span>
@@ -781,11 +790,25 @@ function Room({
         );
     };
 
+    const players = room.members.filter((m) => m.slot !== null).length;
+    const watchers = room.members.filter((m) => m.slot === null);
+    const freeSlot = BUNNY_NAMES.findIndex((_, slot) => !room.members.some((m) => m.slot === slot));
+    const enough = players >= MIN_MATCH_PLAYERS;
+
     let status: string;
-    if (room.status !== 'lobby')
-        status = me && !me.inMatch ? "A match is on. You'll be in the next one." : 'A match is on.';
-    else if (isHost) status = 'You are the host: pick a level and start the match.';
-    else status = 'Waiting for the host to start the match.';
+    let hint = ' ';
+    if (room.status !== 'lobby') {
+        status = me && !me.inMatch ? 'A match is on. You can watch it.' : 'A match is on.';
+        hint = me?.slot !== null ? "You'll play in the next one." : ' ';
+    } else if (isHost) {
+        status = enough ? 'You are the host: pick a level and start the match.' : 'A match needs at least two bunnies.';
+        hint =
+            me?.slot === null ? 'You only watch. Click a free bunny to play.' : 'Click a free bunny to switch to it.';
+    } else {
+        status = enough ? 'Waiting for the host to start the match.' : 'Waiting for more bunnies...';
+        hint =
+            me?.slot === null ? 'You only watch. Click a free bunny to play.' : 'Click a free bunny to switch to it.';
+    }
 
     return (
         <>
@@ -795,6 +818,23 @@ function Room({
                     <Text text={room.name} color="gold" maxWidth={140} />
                 </Panel>
             </At>
+            {watchers.length > 0 && (
+                <At x={8} y={34}>
+                    <div className="gp-col" style={{ gap: 0 }}>
+                        <Text text="Watching:" color="dim" shadow />
+                        {watchers.slice(0, 3).map((w) => (
+                            <Text
+                                key={w.id}
+                                text={w.name}
+                                color={w.id === myId ? 'gold' : 'white'}
+                                shadow
+                                maxWidth={100}
+                            />
+                        ))}
+                        {watchers.length > 3 && <Text text={`and ${watchers.length - 3} more`} color="dim" shadow />}
+                    </div>
+                </At>
+            )}
 
             {BUNNY_NAMES.map((bunny, slot) => {
                 const member = room.members.find((m) => m.slot === slot);
@@ -870,7 +910,14 @@ function Room({
                         />
                     </div>
                     {isHost && canPick && (
-                        <Button label="START MATCH" primary onClick={() => net.send({ t: 'start' })} width={118} />
+                        <Button
+                            label="START MATCH"
+                            primary
+                            disabled={!enough}
+                            title={enough ? undefined : 'A match needs at least two bunnies.'}
+                            onClick={() => net.send({ t: 'start' })}
+                            width={118}
+                        />
                     )}
                 </Panel>
             </At>
@@ -878,7 +925,7 @@ function Room({
             <At x={SCENE_X + 6} y={216}>
                 <div className="gp-col" style={{ gap: 0 }}>
                     <Text text={status} color="white" />
-                    <Text text={canPick ? 'Click a free bunny to switch to it.' : ' '} color="dim" />
+                    <Text text={hint} color="dim" />
                 </div>
             </At>
             <At x={SCENE_X + 6} y={250}>
@@ -886,6 +933,22 @@ function Room({
                     <Button label="INVITE" onClick={invite} />
                     <Button label="OPTIONS" onClick={onOptions} />
                     {lastResult && <Button label="LAST MATCH" onClick={() => setShowResults(true)} />}
+                    {canPick && me?.slot !== null && (
+                        <Button
+                            label="SIT OUT"
+                            title="Watch the next match instead of playing"
+                            onClick={() => net.send({ t: 'slot', slot: null })}
+                        />
+                    )}
+                    {canPick && me?.slot === null && freeSlot >= 0 && (
+                        <Button label="PLAY" onClick={() => net.send({ t: 'slot', slot: freeSlot })} />
+                    )}
+                    {!canPick && me && !me.inMatch && (
+                        <Button label="WATCH" primary onClick={() => net.send({ t: 'watch' })} />
+                    )}
+                    {!canPick && isHost && me && !me.inMatch && (
+                        <Button label="END MATCH" onClick={() => net.send({ t: 'quit' })} />
+                    )}
                     <Button label="LEAVE" onClick={() => net.send({ t: 'leave' })} />
                 </div>
             </At>
@@ -933,6 +996,12 @@ export default function Online() {
         if (loaded && settings.name && state.status === 'idle') net.connect(settings.name);
     }, [loaded, settings.name, state.status]);
 
+    // Remember the name the server accepted (a rename to a taken name is refused, and names are cleaned up)
+    useEffect(() => {
+        const accepted = state.me?.name;
+        if (loaded && accepted && accepted !== settings.name) updateSettings({ name: accepted });
+    }, [state.me?.name]);
+
     useEffect(() => {
         if (state.match_over && state.match && state.room) seen_results.set(state.room.id, state.match.id);
     }, [state.match_over, state.match?.id]);
@@ -962,6 +1031,7 @@ export default function Online() {
                 match={state.match}
                 myId={state.me.id}
                 isHost={state.room?.hostId === state.me.id}
+                spectating={state.spectating}
                 settings={matchSettings}
             />
         );
@@ -1005,6 +1075,17 @@ export default function Online() {
 
             {loaded && !settings.name && (
                 <NameDialog initial="" title="WELCOME, BUNNY!" onSubmit={(name) => updateSettings({ name })} />
+            )}
+            {loaded && settings.name && state.name_taken && (
+                <NameDialog
+                    initial={state.name_taken}
+                    title="NAME TAKEN"
+                    note={`Somebody online is already called ${state.name_taken}. Please pick another name.`}
+                    onSubmit={(name) => {
+                        updateSettings({ name });
+                        net.connect(name);
+                    }}
+                />
             )}
 
             {loaded && settings.name && !online && (

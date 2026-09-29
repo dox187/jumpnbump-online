@@ -7,7 +7,9 @@ import {
     DEFAULT_END_SCORE,
     DEFAULT_LEVEL,
     END_SCORE_OPTIONS,
+    MAX_ROOM_MEMBERS,
     MAX_ROOM_PLAYERS,
+    MIN_MATCH_PLAYERS,
     MatchEndReason,
     MatchResult,
     NAME_MAX_LENGTH,
@@ -33,13 +35,20 @@ const MESSAGE_RATE_WINDOW_MS = 1000;
 const MAX_MESSAGES_PER_WINDOW = 400;
 const TICK_INTERVAL_MS = 4;
 const LIST_BROADCAST_DELAY_MS = 100;
+const TOKEN_MAX_LENGTH = 64;
+/** Hop samples from one client beyond this rate are dropped. */
+const MAX_HOPS_PER_SECOND = 30;
 
 type Client = {
     id: string;
     ws: WebSocket;
     ip: string;
     name: string;
+    /** Chosen by the browser tab; a reconnect with the same token may take over the name. */
+    token: string;
     greeted: boolean;
+    hop_window_start: number;
+    hop_count: number;
     room: Room | null;
     message_window_start: number;
     message_count: number;
@@ -48,7 +57,8 @@ type Client = {
 
 type Member = {
     client: Client;
-    slot: number;
+    /** The member's bunny, or null for a spectator. */
+    slot: number | null;
     joined: number;
 };
 
@@ -83,6 +93,11 @@ function is_int(value: unknown, min: number, max: number): value is number {
     return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
 }
 
+/** Names are unique among the players online, ignoring case. */
+function name_key(name: string) {
+    return name.normalize('NFC').toLocaleLowerCase();
+}
+
 export class Lobby {
     private clients = new Map<string, Client>();
     private rooms = new Map<string, Room>();
@@ -114,7 +129,10 @@ export class Lobby {
             ws,
             ip,
             name: '',
+            token: '',
             greeted: false,
+            hop_window_start: 0,
+            hop_count: 0,
             room: null,
             message_window_start: performance.now(),
             message_count: 0,
@@ -161,7 +179,18 @@ export class Lobby {
                 client.ws.close(1008, 'Protocol version mismatch');
                 return;
             }
-            client.name = clean_text(message.name, NAME_MAX_LENGTH) || 'Bunny';
+            const name = clean_text(message.name, NAME_MAX_LENGTH) || 'Bunny';
+            const token = typeof message.token === 'string' ? message.token.slice(0, TOKEN_MAX_LENGTH) : '';
+            const holder = this.name_holder(name, client);
+            if (holder && token && holder.token === token) {
+                // The same tab reconnected before the server noticed that its old connection was gone
+                this.drop_client(holder, 'Replaced by a new connection');
+            } else if (holder) {
+                this.send(client, { t: 'nameTaken', name });
+                return;
+            }
+            client.name = name;
+            client.token = token;
             client.greeted = true;
             this.send(client, { t: 'welcome', id: client.id, name: client.name, online: this.online_count() });
             this.send(client, { t: 'rooms', rooms: this.room_list() });
@@ -200,6 +229,11 @@ export class Lobby {
             case 'name': {
                 const name = clean_text(message.name, NAME_MAX_LENGTH);
                 if (!name) return;
+                if (this.name_holder(name, client)) {
+                    this.send(client, { t: 'error', message: `Somebody online is already called ${name}.` });
+                    this.send(client, { t: 'welcome', id: client.id, name: client.name, online: this.online_count() });
+                    return;
+                }
                 client.name = name;
                 this.send(client, { t: 'welcome', id: client.id, name: client.name, online: this.online_count() });
                 if (room) this.broadcast_room(room);
@@ -219,11 +253,49 @@ export class Lobby {
                 return;
 
             case 'slot': {
-                if (!room || room.status !== 'lobby' || !is_int(message.slot, 0, MAX_ROOM_PLAYERS - 1)) return;
-                const taken = [...room.members.values()].some((m) => m.slot === message.slot);
-                if (taken) return;
-                room.members.get(client.id)!.slot = message.slot;
+                if (!room || room.status !== 'lobby') return;
+                const member = room.members.get(client.id)!;
+                if (message.slot === null) {
+                    member.slot = null;
+                } else {
+                    if (!is_int(message.slot, 0, MAX_ROOM_PLAYERS - 1)) return;
+                    if ([...room.members.values()].some((m) => m.slot === message.slot)) return;
+                    member.slot = message.slot;
+                }
                 this.broadcast_room(room);
+                this.schedule_list_broadcast();
+                return;
+            }
+
+            case 'watch':
+                if (room?.match) {
+                    room.match.add_spectator(client.id, (m) => this.send(client, m));
+                    this.broadcast_room(room);
+                }
+                return;
+
+            case 'unwatch':
+                if (room?.match?.is_watching(client.id)) {
+                    room.match.remove_spectator(client.id);
+                    this.broadcast_room(room);
+                }
+                return;
+
+            case 'hop': {
+                const member = room?.members.get(client.id);
+                if (!room || !member || member.slot === null || room.match?.has_participant(client.id)) return;
+                const sample = message.s;
+                if (!Array.isArray(sample) || sample.length !== 3) return;
+                if (!is_int(sample[0], -32, 432) || !is_int(sample[1], -512, 288) || !is_int(sample[2], 0, 17)) {
+                    return;
+                }
+                if (now - client.hop_window_start > 1000) {
+                    client.hop_window_start = now;
+                    client.hop_count = 0;
+                }
+                if (++client.hop_count > MAX_HOPS_PER_SECOND) return;
+                const hop: ServerMessage = { t: 'hop', id: client.id, s: [sample[0], sample[1], sample[2]] };
+                for (const other of room.members.values()) if (other.client !== client) this.send(other.client, hop);
                 return;
             }
 
@@ -260,6 +332,7 @@ export class Lobby {
                 if (is_host) room.match.end('host');
                 else {
                     room.match.remove(client.id, now);
+                    room.match?.remove_spectator(client.id);
                     this.broadcast_room(room);
                 }
                 return;
@@ -312,7 +385,7 @@ export class Lobby {
             return;
         }
         if (client.room === room) return;
-        if (room.members.size >= MAX_ROOM_PLAYERS) {
+        if (room.members.size >= MAX_ROOM_MEMBERS) {
             this.send(client, { t: 'error', message: 'That room is full.' });
             return;
         }
@@ -343,17 +416,21 @@ export class Lobby {
 
         // The room may have changed while the password was being checked
         if (client.ws.readyState !== client.ws.OPEN || this.rooms.get(room.id) !== room) return;
-        if (room.members.size >= MAX_ROOM_PLAYERS) {
+        if (room.members.size >= MAX_ROOM_MEMBERS) {
             this.send(client, { t: 'error', message: 'That room is full.' });
             return;
         }
 
         this.leave_room(client);
+        // A free bunny while the room waits; otherwise (match running, all four taken) a spectator
         const used = new Set([...room.members.values()].map((m) => m.slot));
-        let slot = 0;
-        while (used.has(slot)) slot++;
+        let slot: number | null = null;
+        if (room.status === 'lobby') {
+            for (let s = 0; s < MAX_ROOM_PLAYERS && slot === null; s++) if (!used.has(s)) slot = s;
+        }
         room.members.set(client.id, { client, slot, joined: performance.now() });
         client.room = room;
+        room.match?.add_spectator(client.id, (m) => this.send(client, m));
         this.broadcast_room(room);
         this.schedule_list_broadcast();
     }
@@ -364,6 +441,7 @@ export class Lobby {
         client.room = null;
         room.members.delete(client.id);
         room.match?.remove(client.id, performance.now());
+        room.match?.remove_spectator(client.id);
 
         if (room.members.size === 0) {
             room.match?.end('empty');
@@ -379,6 +457,11 @@ export class Lobby {
     }
 
     private async start_match(room: Room) {
+        const players = () => [...room.members.values()].filter((m) => m.slot !== null).length;
+        if (players() < MIN_MATCH_PLAYERS) {
+            this.broadcast_room_message(room, { t: 'error', message: 'A match needs at least two bunnies.' });
+            return;
+        }
         let map;
         try {
             map = await load_level_map(this.levels_dir, room.level);
@@ -387,11 +470,12 @@ export class Lobby {
             this.broadcast_room_message(room, { t: 'error', message: 'The selected level could not be loaded.' });
             return;
         }
-        if (room.status !== 'lobby' || this.rooms.get(room.id) !== room || room.members.size === 0) return;
+        if (room.status !== 'lobby' || this.rooms.get(room.id) !== room || players() < MIN_MATCH_PLAYERS) return;
 
         const participants: (Participant | null)[] = new Array(MAX_ROOM_PLAYERS).fill(null);
         for (const member of room.members.values()) {
             const client = member.client;
+            if (member.slot === null) continue;
             participants[member.slot] = { id: client.id, name: client.name, send: (m) => this.send(client, m) };
         }
 
@@ -405,6 +489,10 @@ export class Lobby {
             on_finish: (reason, result) => this.match_finished(room, match, reason, result),
         });
         room.match = match;
+        for (const member of room.members.values()) {
+            const client = member.client;
+            if (member.slot === null) match.add_spectator(client.id, (m) => this.send(client, m));
+        }
         this.broadcast_room(room);
         this.schedule_list_broadcast();
         this.ensure_ticker();
@@ -455,13 +543,14 @@ export class Lobby {
             endScore: room.end_score,
             status: room.status,
             members: [...room.members.values()]
-                .sort((a, b) => a.slot - b.slot)
+                .sort((a, b) => (a.slot ?? MAX_ROOM_PLAYERS) - (b.slot ?? MAX_ROOM_PLAYERS) || a.joined - b.joined)
                 .map((m) => ({
                     id: m.client.id,
                     name: m.client.name,
                     slot: m.slot,
                     host: m.client.id === room.host_id,
                     inMatch: match ? match.has_participant(m.client.id) : false,
+                    watching: match ? match.is_watching(m.client.id) : false,
                 })),
             lastResult: room.last_result,
         };
@@ -472,7 +561,8 @@ export class Lobby {
             id: room.id,
             name: room.name,
             locked: room.password !== null,
-            players: room.members.size,
+            players: [...room.members.values()].filter((m) => m.slot !== null).length,
+            members: room.members.size,
             status: room.status,
             level: level_name(room.level),
         }));
@@ -500,6 +590,21 @@ export class Lobby {
                 if (!client.room) this.send(client, rooms);
             }
         }, LIST_BROADCAST_DELAY_MS);
+    }
+
+    /** Another client online that uses this name. */
+    private name_holder(name: string, except: Client): Client | null {
+        const key = name_key(name);
+        for (const other of this.clients.values()) {
+            if (other !== except && other.greeted && name_key(other.name) === key) return other;
+        }
+        return null;
+    }
+
+    private drop_client(client: Client, reason: string) {
+        this.leave_room(client);
+        this.clients.delete(client.id);
+        client.ws.close(4000, reason);
     }
 
     private online_count() {

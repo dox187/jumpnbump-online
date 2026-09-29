@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { net } from '../../net/client';
 import { BUNNY_NAMES, MatchInfo } from '../../net/protocol';
 import type { GameInputDevice } from '../../inputs';
-import type { OnlineGame, OnlineGamePhase } from '../../online/online-game';
+import type { Countdown, OnlineGame, OnlineGamePhase } from '../../online/online-game';
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../../constants';
 import { Button, Panel, Text, gp, pixel_variables, usePixelScale } from '../pixel/components';
 import '../pixel/pixel.css';
@@ -16,17 +16,19 @@ export type MatchSettings = {
 };
 
 const ESC_CONFIRM_MS = 3000;
-const LEGEND_MS = 6000;
 
 export default function OnlineMatch({
     match,
     myId,
     isHost,
+    spectating,
     settings,
 }: {
     match: MatchInfo;
     myId: string;
     isHost: boolean;
+    /** Only watching: no bunny, ESC goes straight back to the room. */
+    spectating: boolean;
     settings: MatchSettings;
 }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -38,16 +40,26 @@ export default function OnlineMatch({
     const [failed, setFailed] = useState<string | null>(null);
     const [ping, setPing] = useState<number | null>(null);
     const [stalled, setStalled] = useState(false);
+    const [countdown, setCountdown] = useState<Countdown>(null);
 
     hostRef.current = isHost;
-    const slot = match.slots.findIndex((s) => s?.id === myId);
+    const slot = spectating ? -1 : match.slots.findIndex((s) => s?.id === myId);
 
     const quit = () => {
+        if (spectating) {
+            net.send({ t: 'unwatch' });
+            net.leave_match();
+            return;
+        }
         net.send({ t: 'quit' });
         if (!hostRef.current) net.leave_match();
     };
 
     const onEscape = () => {
+        if (spectating) {
+            quit();
+            return;
+        }
         const now = performance.now();
         if (now < escArmedUntil.current) {
             escArmedUntil.current = 0;
@@ -93,10 +105,11 @@ export default function OnlineMatch({
                     on_exit: () => net.leave_match(),
                 });
                 game.on_phase = setPhase;
+                game.on_countdown = setCountdown;
                 game.init();
                 gameRef.current = game;
                 net.set_match_handler((message) => game!.handle_message(message));
-                net.send({ t: 'ready', match: match.id });
+                if (!spectating) net.send({ t: 'ready', match: match.id });
             })
             .catch((error) => {
                 console.error('could not start the match', error);
@@ -117,17 +130,8 @@ export default function OnlineMatch({
         };
     }, [match.id]);
 
-    // Show who is who for a few seconds when the match starts, and while TAB is held
-    const [legendUntil, setLegendUntil] = useState(0);
+    // Show who is who during the countdown, and while TAB is held
     const [tabHeld, setTabHeld] = useState(false);
-    useEffect(() => {
-        if (phase === 'playing') setLegendUntil(performance.now() + LEGEND_MS);
-    }, [phase === 'playing']);
-    useEffect(() => {
-        if (!legendUntil) return;
-        const timer = setTimeout(() => setLegendUntil(0), Math.max(0, legendUntil - performance.now()));
-        return () => clearTimeout(timer);
-    }, [legendUntil]);
     useEffect(() => {
         const down = (e: KeyboardEvent) => e.key === 'Tab' && setTabHeld(true);
         const up = (e: KeyboardEvent) => e.key === 'Tab' && setTabHeld(false);
@@ -144,8 +148,9 @@ export default function OnlineMatch({
 
     const scale = usePixelScale(SCREEN_WIDTH, SCREEN_HEIGHT);
     const waiting = phase === 'loading' || phase === 'waiting' || failed !== null;
-    const showLegend = phase === 'playing' && (legendUntil > 0 || tabHeld);
+    const showLegend = phase === 'playing' && ((countdown !== null && countdown > 0) || tabHeld);
     const myBunny = slot >= 0 ? BUNNY_NAMES[slot] : null;
+    const escHint = spectating ? 'back' : isHost ? 'end match' : 'leave';
 
     return (
         <div className="gp-root" style={pixel_variables(scale)}>
@@ -169,6 +174,7 @@ export default function OnlineMatch({
                     >
                         <Panel className="gp-col" style={{ alignItems: 'center', gap: 0 }}>
                             {myBunny && <Text text={`You are ${myBunny.toUpperCase()}`} color="gold" />}
+                            {spectating && <Text text="You are watching" color="gold" />}
                             <div className="gp-row" style={{ gap: gp(8) }}>
                                 {match.slots.map((s, i) =>
                                     s ? (
@@ -182,11 +188,38 @@ export default function OnlineMatch({
                                 )}
                             </div>
                             <Text
-                                text={`ping ${ping ?? '-'} ms - TAB: players - ESC twice: ${isHost ? 'end match' : 'leave'}`}
+                                text={`ping ${ping ?? '-'} ms - TAB: players - ESC${spectating ? '' : ' twice'}: ${escHint}`}
                                 color="dim"
                             />
                         </Panel>
                     </div>
+                )}
+
+                {phase === 'playing' && countdown !== null && (
+                    <div
+                        className="gp-abs pointer-events-none"
+                        style={{ left: 0, right: gp(48), top: gp(96), display: 'flex', justifyContent: 'center' }}
+                    >
+                        <Text
+                            key={countdown}
+                            text={countdown > 0 ? String(countdown) : 'GO!'}
+                            color={countdown > 0 ? 'gold' : 'green'}
+                            size={4}
+                            shadow
+                            className="gp-pop"
+                        />
+                    </div>
+                )}
+
+                {phase === 'replay' && (
+                    <>
+                        <div className="gp-abs gp-blink pointer-events-none" style={{ left: gp(6), top: gp(4) }}>
+                            <Text text="REPLAY" color="red" size={2} shadow />
+                        </div>
+                        <div className="gp-abs" style={{ right: gp(54), bottom: gp(4) }}>
+                            <Button label="SKIP" onClick={() => gameRef.current?.skip_replay()} />
+                        </div>
+                    </>
                 )}
 
                 {(notice || (stalled && phase === 'playing')) && (
@@ -217,8 +250,12 @@ export default function OnlineMatch({
                                 color={failed ? 'red' : 'gold'}
                             />
                             {myBunny && !failed && <Text text={`You play ${myBunny}.`} color="white" />}
+                            {spectating && !failed && <Text text="You are watching." color="white" />}
                             {!failed && <Text text="SHIFT+F: fullscreen" color="dim" />}
-                            <Button label={isHost && !failed ? 'CANCEL MATCH' : 'BACK TO THE ROOM'} onClick={quit} />
+                            <Button
+                                label={isHost && !spectating && !failed ? 'CANCEL MATCH' : 'BACK TO THE ROOM'}
+                                onClick={quit}
+                            />
                         </Panel>
                     </div>
                 )}

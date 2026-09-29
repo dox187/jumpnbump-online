@@ -3,6 +3,7 @@ import { JNB_MAX_PLAYERS } from '../src/constants';
 import type { BanMap } from '../src/sim/ban-map';
 import { NO_CHEATS, Sim, SimState, clone_state, create_state, hash_state, pack_inputs } from '../src/sim/sim';
 import {
+    COUNTDOWN_FRAMES,
     FRAME_MS,
     HASH_INTERVAL,
     LeaveEvent,
@@ -38,6 +39,8 @@ export class Match {
     status: 'loading' | 'playing' | 'over' = 'loading';
 
     private participants: (Participant | null)[];
+    /** Spectators by client id; they get the confirmations but send no inputs. */
+    private spectators = new Map<string, { send: (message: ServerMessage) => void; last_snapshot_at: number }>();
     private ready: boolean[];
     private readonly seed: number;
     private readonly map: BanMap;
@@ -82,7 +85,7 @@ export class Match {
 
         const slots: MatchSlot[] = this.participants.map((p) => (p ? { id: p.id, name: p.name } : null));
         this.info = { id: this.id, level: options.level, endScore: this.end_score, slots };
-        this.broadcast({ t: 'load', match: this.info });
+        this.broadcast_players({ t: 'load', match: this.info });
     }
 
     get frame() {
@@ -91,6 +94,21 @@ export class Match {
 
     has_participant(client_id: string) {
         return this.slot_of(client_id) >= 0;
+    }
+
+    is_watching(client_id: string) {
+        return this.spectators.has(client_id);
+    }
+
+    /** Starts streaming the match to a spectator: from the current state if it runs, otherwise from 'go'. */
+    add_spectator(client_id: string, send: (message: ServerMessage) => void) {
+        if (this.status === 'over' || this.has_participant(client_id) || this.spectators.has(client_id)) return;
+        this.spectators.set(client_id, { send, last_snapshot_at: -Infinity });
+        if (this.status === 'playing') send({ t: 'watch', match: this.info, state: clone_state(this.state) });
+    }
+
+    remove_spectator(client_id: string) {
+        this.spectators.delete(client_id);
     }
 
     participant_ids(): string[] {
@@ -132,8 +150,16 @@ export class Match {
     }
 
     handle_resync(client_id: string, now: number) {
+        if (this.status !== 'playing') return;
+        const spectator = this.spectators.get(client_id);
+        if (spectator) {
+            if (now - spectator.last_snapshot_at < SNAPSHOT_COOLDOWN_MS) return;
+            spectator.last_snapshot_at = now;
+            spectator.send({ t: 'snap', state: clone_state(this.state) });
+            return;
+        }
         const slot = this.slot_of(client_id);
-        if (slot < 0 || this.status !== 'playing') return;
+        if (slot < 0) return;
         this.send_snapshot(slot, now);
     }
 
@@ -193,7 +219,8 @@ export class Match {
                     this.masks[slot] = 0;
                 }
             }
-            const packed = pack_inputs(this.masks);
+            // Nobody moves while the countdown runs
+            const packed = f < COUNTDOWN_FRAMES ? 0 : pack_inputs(this.masks);
             this.sim.step(packed);
             inputs.push(packed);
 
@@ -234,7 +261,9 @@ export class Match {
         this.sim.init_players();
         this.status = 'playing';
         this.start_time = now;
-        this.broadcast({ t: 'go', match: this.id, state: clone_state(this.state) });
+        this.broadcast_players({ t: 'go', match: this.id, state: clone_state(this.state) });
+        const watch: ServerMessage = { t: 'watch', match: this.info, state: clone_state(this.state) };
+        for (const spectator of this.spectators.values()) spectator.send(watch);
     }
 
     private report_leads() {
@@ -255,6 +284,7 @@ export class Match {
         if (result) {
             this.broadcast({ t: 'over', match: this.id, reason, state: clone_state(this.state), result });
         }
+        this.spectators.clear();
         this.on_finish(reason, result);
     }
 
@@ -274,7 +304,13 @@ export class Match {
         return this.participants.findIndex((p) => p !== null && p.id === client_id);
     }
 
+    /** To the players and the spectators. */
     private broadcast(message: ServerMessage) {
+        this.broadcast_players(message);
+        for (const spectator of this.spectators.values()) spectator.send(message);
+    }
+
+    private broadcast_players(message: ServerMessage) {
         for (const participant of this.participants) participant?.send(message);
     }
 }

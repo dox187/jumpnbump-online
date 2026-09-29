@@ -1,16 +1,17 @@
 /**
  * Runs one online match in a canvas: loads the level, drives the NetSession every animation frame,
- * draws the predicted state with the original renderer and finally shows the classic score screen.
+ * draws the predicted state with the original renderer, replays the last death in slow motion and
+ * finally shows the classic score screen.
  */
 import { get_gob } from '../assets';
 import { memset } from '../c';
-import { JNB_MAX_PLAYERS, KEY, MOD, NUM, SCREEN_HEIGHT, SCREEN_WIDTH, SFX, SFX_FREQ } from '../constants';
+import { JNB_MAX_PLAYERS, KEY, MOD, NUM, OBJ, SCREEN_HEIGHT, SCREEN_WIDTH, SFX, SFX_FREQ } from '../constants';
 import ctx, { resetContext } from '../context';
 import { local_fx, show_score } from '../fx';
 import type { GameInputDevice } from '../inputs';
 import { get_ban_map } from '../level';
 import { deinit_program, init_level_scene, init_program, update_objects } from '../main';
-import { ClientMessage, MatchInfo, MatchResult, ServerMessage } from '../net/protocol';
+import { COUNTDOWN_FRAMES, ClientMessage, FRAME_MS, MatchInfo, MatchResult, ServerMessage } from '../net/protocol';
 import { NetSession, SessionStats } from '../net/session';
 import {
     add_pob,
@@ -35,7 +36,7 @@ import {
     dj_stop,
     dj_stop_sfx_channel,
 } from '../sdl/sound';
-import { INPUT_LEFT, INPUT_RIGHT, INPUT_UP, SimState } from '../sim/sim';
+import { INPUT_LEFT, INPUT_RIGHT, INPUT_UP, NO_CHEATS, Sim, SimFx, SimState, clone_state } from '../sim/sim';
 import type { Pob } from '../assets';
 import { CAPS_TOP, TextColor, fit_text, font_ready, init_font, render_text } from '../web/pixel/font';
 
@@ -43,6 +44,7 @@ export type OnlineGameOptions = {
     canvas: HTMLCanvasElement;
     dat: ArrayBuffer;
     match: MatchInfo;
+    /** Our bunny, or -1 when we only watch. */
     slot: number;
     control: GameInputDevice;
     mute_music: boolean;
@@ -57,36 +59,63 @@ export type OnlineGameOptions = {
     on_exit: () => void;
 };
 
-export type OnlineGamePhase = 'loading' | 'waiting' | 'playing' | 'ending' | 'scores';
+export type OnlineGamePhase = 'loading' | 'waiting' | 'playing' | 'replay' | 'ending' | 'scores';
+
+/** Seconds left before the bunnies may move (3, 2, 1), 0 for "go", null once the match runs. */
+export type Countdown = number | null;
 
 const BUNNY_LABELS = ['DOTT', 'JIFFY', 'FIZZ', 'MIJJI'];
-/** The level is 22 tiles wide; the score column fills the rest of the screen. */
-const PLAYFIELD_WIDTH = 352;
-const NAME_TAG_WIDTH = 80;
 const SCORE_NAME_WIDTH = 56;
+/** The name plates cover the bunny names printed on the level's side panel, one panel per 64 rows. */
+const PLATE_X = 354;
+const PLATE_WIDTH = 45;
+const PLATE_TOP = 20;
+const PLATE_HEIGHT = 14;
+/** How long "GO!" stays up, in frames. */
+const GO_FRAMES = 40;
 
-/** A player name drawn in the game font, with the rows its visible pixels occupy. */
-type NameTag = { canvas: HTMLCanvasElement; top: number; bottom: number };
+/** The replay shows the frames around the last death: this many before it and after it... */
+const REPLAY_BEFORE = 100;
+const REPLAY_AFTER = 20;
+/** ...this many times slower than real time (2 seconds take 5)... */
+const REPLAY_SLOWDOWN = 2.5;
+/** ...and holds the last frame this long. */
+const REPLAY_HOLD_MS = 600;
+/** Confirmed states are kept every this many frames, for this many frames back. */
+const SNAPSHOT_EVERY = 30;
+const HISTORY_FRAMES = 1200;
+/** A bunny that moved further than this between two frames respawned; it is not interpolated. */
+const TELEPORT_PX = 32;
+
+/** A player name drawn in the game font. */
+type NameTag = { canvas: HTMLCanvasElement };
 
 function name_tag(text: string, width: number, color: TextColor): NameTag {
-    const canvas = render_text(fit_text(text, width), color, true);
-    const { data } = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height);
-    let top = canvas.height;
-    let bottom = 0;
-    for (let y = 0; y < canvas.height; y++) {
-        for (let x = 0; x < canvas.width; x++) {
-            if (!data[(y * canvas.width + x) * 4 + 3]) continue;
-            top = Math.min(top, y);
-            bottom = Math.max(bottom, y);
-        }
-    }
-    return { canvas, top: Math.min(top, bottom), bottom };
+    return { canvas: render_text(fit_text(text, width), color, true) };
 }
+
+function total_bumps(state: SimState) {
+    let total = 0;
+    for (const player of state.player) total += player.bumps;
+    return total;
+}
+
+type Replay = {
+    state: SimState;
+    sim: Sim;
+    first: number;
+    last: number;
+    started: number;
+    /** Positions before the latest step, for smooth slow motion. */
+    from_x: number[];
+    from_y: number[];
+};
 
 export class OnlineGame {
     phase: OnlineGamePhase = 'loading';
     result: MatchResult | null = null;
     on_phase: (phase: OnlineGamePhase) => void = () => {};
+    on_countdown: (countdown: Countdown) => void = () => {};
 
     private options: OnlineGameOptions;
     private session: NetSession | null = null;
@@ -104,9 +133,22 @@ export class OnlineGame {
     private last_render_frame = -1;
     private last_render_time = 0;
     private screen: CanvasRenderingContext2D | null = null;
-    /** Per bunny slot: the name above the bunny and the name on the score screen. */
-    private name_tags: (NameTag | null)[] = [];
+    /** Per bunny slot: the name on the side panel and on the score screen. */
+    private plate_tags: (NameTag | null)[] = [];
     private score_tags: (NameTag | null)[] = [];
+    private countdown: Countdown = null;
+
+    /** Recent confirmed history for the replay. */
+    private snapshots: SimState[] = [];
+    private inputs = new Int32Array(HISTORY_FRAMES);
+    private enabled = new Uint8Array(HISTORY_FRAMES);
+    private recorded_until = 0;
+    private last_input = 0;
+    private bumps_seen = 0;
+    private last_kill_frame = -1;
+    private replay: Replay | null = null;
+    /** What the fade-out after the match shows: the end of the replay, or the final state. */
+    private ending_view: SimState | null = null;
 
     constructor(options: OnlineGameOptions) {
         this.options = options;
@@ -114,6 +156,10 @@ export class OnlineGame {
 
     stats(): SessionStats | null {
         return this.session ? this.session.stats() : null;
+    }
+
+    private get spectator() {
+        return this.options.slot < 0;
     }
 
     /** Prepares graphics, sound and the level. Resolves when the level is ready to be played. */
@@ -128,9 +174,11 @@ export class OnlineGame {
         ctx.info.no_sound = options.mute_music && options.mute_effects;
         ctx.info.no_music = options.mute_music;
         ctx.info.music_no_sound = options.mute_effects;
-        const controls = [...ctx.controls];
-        controls[options.slot] = options.control;
-        ctx.controls = controls;
+        if (!this.spectator) {
+            const controls = [...ctx.controls];
+            controls[options.slot] = options.control;
+            ctx.controls = controls;
+        }
 
         init_program(canvas, options.dat, this.pal);
         this.screen = canvas.getContext('2d');
@@ -150,7 +198,7 @@ export class OnlineGame {
 
     handle_message(message: ServerMessage) {
         if (this.destroyed) return;
-        if (message.t === 'go') {
+        if (message.t === 'go' || message.t === 'watch') {
             this.start(message.state);
             return;
         }
@@ -159,11 +207,13 @@ export class OnlineGame {
             this.queued.push(message);
             return;
         }
+        this.session.handle_message(message);
         if (message.t === 'over') {
             this.result = message.result;
             this.make_name_tags(message.result.names);
+            // The final step may have been the deciding bump
+            if (total_bumps(message.state) > this.bumps_seen) this.last_kill_frame = message.state.frame - 1;
         }
-        this.session.handle_message(message);
     }
 
     destroy() {
@@ -179,8 +229,20 @@ export class OnlineGame {
         ctx.state = 'stopped';
     }
 
+    /** Leaves the slow-motion replay, e.g. from a button in the page overlay. */
+    skip_replay() {
+        if (this.phase === 'replay') this.end_replay();
+    }
+
+    /** Continues from the score screen, e.g. from a button in the page overlay. */
+    dismiss_scores() {
+        if (this.phase === 'scores') this.fading_out_scores = true;
+    }
+
     private start(state: SimState) {
+        if (this.session) return;
         const options = this.options;
+        this.bumps_seen = total_bumps(state);
         this.session = new NetSession({
             slot: options.slot,
             state,
@@ -191,6 +253,7 @@ export class OnlineGame {
             rtt_ms: options.rtt_ms(),
             fx: local_fx,
             on_new_frame: this.on_new_frame,
+            on_confirm: this.record,
         });
         for (const message of this.queued.splice(0)) this.handle_message(message);
 
@@ -209,7 +272,7 @@ export class OnlineGame {
         for (let i = 0; i < JNB_MAX_PLAYERS; i++) {
             const name = names[i];
             const color: TextColor = i === this.options.slot ? 'gold' : 'white';
-            this.name_tags[i] = name ? name_tag(name, NAME_TAG_WIDTH, color) : null;
+            this.plate_tags[i] = name ? name_tag(name, PLATE_WIDTH - 4, color) : null;
             this.score_tags[i] = name ? name_tag(name, SCORE_NAME_WIDTH, color) : null;
         }
     }
@@ -225,28 +288,36 @@ export class OnlineGame {
         return target ? Math.min(1, current / target) : 1;
     }
 
-    private draw_name_tags(state: SimState) {
-        if (!this.screen) return;
+    /** The players' names on dark plates over the bunny names of the side panel. */
+    private draw_name_plates(state: SimState) {
+        const screen = this.screen;
+        if (!screen) return;
         const alpha = this.brightness();
         if (alpha <= 0) return;
-        this.screen.globalAlpha = alpha;
+        screen.globalAlpha = alpha;
         for (let i = 0; i < JNB_MAX_PLAYERS; i++) {
-            const player = state.player[i];
-            const tag = this.name_tags[i];
-            if (!player.enabled || !tag) continue;
-            const width = tag.canvas.width;
-            const height = tag.bottom - tag.top + 1;
-            // Centred over the bunny and kept on screen, so a bunny above the top edge can still be found
-            const x = Math.max(0, Math.min(PLAYFIELD_WIDTH - width, (player.x >> 16) + 8 - (width >> 1)));
-            const top = Math.max(0, (player.y >> 16) - 2 - height);
-            this.screen.drawImage(tag.canvas, x, top - tag.top);
+            const tag = this.plate_tags[i];
+            if (!tag || !state.player[i].enabled) continue;
+            const top = PLATE_TOP + i * 64;
+            screen.fillStyle = '#000';
+            screen.fillRect(PLATE_X, top, PLATE_WIDTH, PLATE_HEIGHT);
+            screen.fillStyle = 'rgba(40, 28, 16, 1)';
+            screen.fillRect(PLATE_X + 1, top + 1, PLATE_WIDTH - 2, PLATE_HEIGHT - 2);
+            const x = PLATE_X + Math.floor((PLATE_WIDTH - tag.canvas.width) / 2);
+            screen.drawImage(tag.canvas, x, top + 3 - CAPS_TOP);
         }
-        this.screen.globalAlpha = 1;
+        screen.globalAlpha = 1;
     }
 
     private set_phase(phase: OnlineGamePhase) {
         this.phase = phase;
         this.on_phase(phase);
+    }
+
+    private set_countdown(countdown: Countdown) {
+        if (countdown === this.countdown) return;
+        this.countdown = countdown;
+        this.on_countdown(countdown);
     }
 
     private loop = (now: number) => {
@@ -255,11 +326,14 @@ export class OnlineGame {
         intr_sysupdate();
 
         const escape_pressed = key_went_down(KEY.ESCAPE);
+        const skip_pressed = escape_pressed || key_went_down('Enter') || key_went_down('Space');
 
         if (this.phase === 'playing') {
             if (escape_pressed) this.options.on_escape();
             const session = this.session!;
             session.update(now, this.read_input());
+            const left = COUNTDOWN_FRAMES - session.frame;
+            this.set_countdown(left > 0 ? Math.ceil(left / 60) : left > -GO_FRAMES ? 0 : null);
             // Draw once per simulated frame; high refresh rate screens would otherwise redraw for nothing
             const new_frame = session.frame !== this.last_render_frame;
             if (session.dirty && (new_frame || now - this.last_render_time > 50 || session.finished)) {
@@ -268,16 +342,23 @@ export class OnlineGame {
                 this.last_render_time = now;
                 this.render(session.view);
             }
-            if (this.session!.finished) this.set_phase('ending');
+            if (session.finished) {
+                this.set_countdown(null);
+                if (!this.start_replay(now)) this.set_phase('ending');
+            }
+        } else if (this.phase === 'replay') {
+            if (skip_pressed) this.end_replay();
+            else this.replay_step(now);
         } else if (this.phase === 'ending') {
             this.fade_out_step(now);
         } else if (this.phase === 'scores') {
-            if (escape_pressed || key_went_down('Enter') || key_went_down('Space')) this.fading_out_scores = true;
+            if (skip_pressed) this.fading_out_scores = true;
             this.scores_step(now);
         }
     };
 
     private read_input() {
+        if (this.spectator) return 0;
         const slot = this.options.slot;
         const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
         let mask = 0;
@@ -292,16 +373,37 @@ export class OnlineGame {
         if (control && control.type === 'keyboard') for (const key of control.mappings) addkey(key, false);
     };
 
-    /** Advances everything cosmetic by one frame; called once for every newly simulated frame. */
-    private on_new_frame = (state: SimState) => {
+    /** Keeps the confirmed history the replay needs; called before each confirmed frame is simulated. */
+    private record = (state: SimState, packed: number) => {
+        const f = state.frame;
+        const bumps = total_bumps(state);
+        if (bumps > this.bumps_seen) this.last_kill_frame = f - 1;
+        this.bumps_seen = bumps;
+        if (f % SNAPSHOT_EVERY === 0) {
+            this.snapshots.push(clone_state(state));
+            if (this.snapshots.length > HISTORY_FRAMES / SNAPSHOT_EVERY) this.snapshots.shift();
+        }
+        let enabled = 0;
+        for (let i = 0; i < JNB_MAX_PLAYERS; i++) if (state.player[i].enabled) enabled |= 1 << i;
+        this.inputs[f % HISTORY_FRAMES] = packed;
+        this.enabled[f % HISTORY_FRAMES] = enabled;
+        this.recorded_until = f + 1;
+        this.last_input = packed;
+    };
+
+    /** Advances everything cosmetic by one frame. */
+    private advance_cosmetics(state: SimState) {
         const main_info = ctx.info;
         ctx.player = state.player as typeof ctx.player;
-
         main_info.page_info.num_pobs = 0;
         update_objects();
         this.object_pobs = main_info.page_info.pobs.slice(0, main_info.page_info.num_pobs);
         if (!this.options.noflies) update_flies(1);
+    }
 
+    /** Called once for every newly simulated frame: cosmetics plus the fade-in of palette and volume. */
+    private on_new_frame = (state: SimState) => {
+        this.advance_cosmetics(state);
         if (this.mod_vol < 30) dj_set_mod_volume(++this.mod_vol);
         if (this.sfx_vol < 64) dj_set_sfx_volume(++this.sfx_vol);
         for (let i = 0; i < 768; i++) {
@@ -315,7 +417,89 @@ export class OnlineGame {
         }
     };
 
-    private render(state: SimState) {
+    /** Rebuilds the last death from the recorded history and starts showing it slowed down. */
+    private start_replay(now: number) {
+        const kill = this.last_kill_frame;
+        if (kill < 0) return false;
+        const first = Math.max(0, kill - REPLAY_BEFORE + 1);
+        if (first < this.recorded_until - HISTORY_FRAMES) return false;
+        let snapshot: SimState | null = null;
+        for (const s of this.snapshots)
+            if (s.frame <= first && s.frame >= this.recorded_until - HISTORY_FRAMES) snapshot = s;
+        if (!snapshot) return false;
+
+        const state = clone_state(snapshot);
+        const sim = new Sim(state, get_ban_map(), NO_CHEATS, 0);
+        while (state.frame < first) this.replay_sim_step(sim, state);
+
+        // Leftover fur, flesh, smoke and splashes of the real death would fly around in the replay too
+        for (const object of ctx.objects) {
+            if (object.type !== OBJ.SPRING && object.type !== OBJ.YEL_BUTFLY && object.type !== OBJ.PINK_BUTFLY) {
+                object.used = 0;
+            }
+        }
+        const fx: SimFx = {
+            objects: ctx.objects,
+            no_gore: ctx.info.no_gore,
+            rnd: local_fx.rnd,
+            add_object: local_fx.add_object,
+            // Deeper, slower sounds for the slow motion
+            dj_play_sfx: (sfx, freq, volume, panning, delay, channel) =>
+                local_fx.dj_play_sfx(sfx, Math.round(freq / 2), volume, panning, delay, channel),
+            add_score: () => {},
+        };
+        sim.fx = fx;
+        this.replay = {
+            state,
+            sim,
+            first,
+            last: kill + REPLAY_AFTER,
+            started: now,
+            from_x: state.player.map((p) => p.x),
+            from_y: state.player.map((p) => p.y),
+        };
+        this.set_phase('replay');
+        return true;
+    }
+
+    /** One replayed frame: the recorded inputs, or after the end of the match the last ones. */
+    private replay_sim_step(sim: Sim, state: SimState) {
+        const f = state.frame;
+        let packed = this.last_input;
+        if (f < this.recorded_until) {
+            packed = this.inputs[f % HISTORY_FRAMES];
+            const enabled = this.enabled[f % HISTORY_FRAMES];
+            for (let i = 0; i < JNB_MAX_PLAYERS; i++) state.player[i].enabled = (enabled & (1 << i)) !== 0;
+        }
+        sim.step(packed);
+    }
+
+    private replay_step(now: number) {
+        const replay = this.replay!;
+        const state = replay.state;
+        const frames = (now - replay.started) / (FRAME_MS * REPLAY_SLOWDOWN);
+        const target = Math.min(replay.first + Math.floor(frames), replay.last + 1);
+        while (state.frame < target) {
+            for (let i = 0; i < JNB_MAX_PLAYERS; i++) {
+                replay.from_x[i] = state.player[i].x;
+                replay.from_y[i] = state.player[i].y;
+            }
+            this.replay_sim_step(replay.sim, state);
+            this.advance_cosmetics(state);
+        }
+        const done = state.frame > replay.last;
+        this.render(state, done ? null : { x: replay.from_x, y: replay.from_y, t: frames % 1 });
+        const length_ms = (replay.last + 1 - replay.first) * FRAME_MS * REPLAY_SLOWDOWN;
+        if (done && now - replay.started > length_ms + REPLAY_HOLD_MS) this.end_replay();
+    }
+
+    private end_replay() {
+        this.ending_view = this.replay?.state ?? null;
+        this.replay = null;
+        this.set_phase('ending');
+    }
+
+    private render(state: SimState, blend: { x: number[]; y: number[]; t: number } | null = null) {
         const main_info = ctx.info;
         const rabbit_gobs = get_gob('rabbit');
         ctx.player = state.player as typeof ctx.player;
@@ -324,7 +508,17 @@ export class OnlineGame {
         for (let i = 0; i < JNB_MAX_PLAYERS; i++) {
             const player = state.player[i];
             if (!player.enabled) continue;
-            pobs.push({ x: player.x >> 16, y: player.y >> 16, image: player.image + i * 18, pob_data: rabbit_gobs });
+            let x = player.x >> 16;
+            let y = player.y >> 16;
+            if (blend) {
+                const from_x = blend.x[i] >> 16;
+                const from_y = blend.y[i] >> 16;
+                if (Math.abs(x - from_x) < TELEPORT_PX && Math.abs(y - from_y) < TELEPORT_PX) {
+                    x = Math.round(from_x + (x - from_x) * blend.t);
+                    y = Math.round(from_y + (y - from_y) * blend.t);
+                }
+            }
+            pobs.push({ x, y, image: player.image + i * 18, pob_data: rabbit_gobs });
         }
         for (const pob of this.object_pobs) {
             if (pobs.length >= NUM.POBS) break;
@@ -345,7 +539,7 @@ export class OnlineGame {
         for (let i = 0; i < JNB_MAX_PLAYERS; i++) if (state.player[i].enabled) show_score(i, state.player[i].bumps);
         draw_score();
         draw_end();
-        this.draw_name_tags(state);
+        this.draw_name_plates(state);
     }
 
     /** The original fades the palette and the music out once the end score is reached. */
@@ -361,7 +555,7 @@ export class OnlineGame {
         }
         if (this.mod_vol > 0) dj_set_mod_volume(--this.mod_vol);
         setpalette(0, 256, this.cur_pal);
-        this.render(this.session!.view);
+        this.render(this.ending_view ?? this.session!.view);
         if (!fading) this.show_scores();
     }
 
@@ -423,11 +617,6 @@ export class OnlineGame {
         }
         setpalette(0, 256, this.cur_pal);
         this.draw_final_scores();
-    }
-
-    /** Continues from the score screen, e.g. from a button in the page overlay. */
-    dismiss_scores() {
-        if (this.phase === 'scores') this.fading_out_scores = true;
     }
 
     private draw_final_scores() {

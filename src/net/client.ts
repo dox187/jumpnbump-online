@@ -2,7 +2,15 @@
  * Browser connection to the multiplayer server: keeps the lobby state, reconnects after network
  * hiccups and hands match traffic to whichever game is currently running.
  */
-import { ClientMessage, MatchInfo, PROTOCOL_VERSION, RoomDetail, RoomSummary, ServerMessage } from './protocol';
+import {
+    ClientMessage,
+    HopSample,
+    MatchInfo,
+    PROTOCOL_VERSION,
+    RoomDetail,
+    RoomSummary,
+    ServerMessage,
+} from './protocol';
 
 export type NetStatus = 'idle' | 'connecting' | 'online' | 'offline';
 
@@ -15,15 +23,38 @@ export type NetState = {
     /** The latest error from the server, with a counter so the UI can tell repeated errors apart. */
     error: { message: string; seq: number; at: number } | null;
     rtt: number;
-    /** The match we take part in, from 'load' until we leave its score screen. */
+    /** The match we take part in or watch, from 'load' / 'watch' until we leave its score screen. */
     match: MatchInfo | null;
     match_over: boolean;
+    /** We only watch `match`. */
+    spectating: boolean;
+    /** The server refused our name because somebody online uses it. */
+    name_taken: string | null;
 };
+
+export type HopTrack = { sample: HopSample; at: number }[];
 
 type MatchHandler = (message: ServerMessage) => void;
 
 const PING_INTERVAL_MS = 2000;
 const MAX_RETRY_MS = 10000;
+const HOP_SAMPLES_KEPT = 8;
+
+/** Identifies this browser tab across reconnects (and reloads), so the server lets it keep its name. */
+function tab_token() {
+    try {
+        let token = sessionStorage.getItem('net-token');
+        if (!token) {
+            token = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, '0')).join(
+                ''
+            );
+            sessionStorage.setItem('net-token', token);
+        }
+        return token;
+    } catch {
+        return '';
+    }
+}
 
 class NetClient {
     state: NetState = {
@@ -36,7 +67,12 @@ class NetClient {
         rtt: 100,
         match: null,
         match_over: false,
+        spectating: false,
+        name_taken: null,
     };
+
+    /** Recent hop samples of the other members' bunnies in the room, by member id; not part of the state. */
+    readonly hops = new Map<string, HopTrack>();
 
     private listeners = new Set<() => void>();
     private ws: WebSocket | null = null;
@@ -49,6 +85,7 @@ class NetClient {
     private match_buffer: ServerMessage[] = [];
     private error_seq = 0;
     private had_room = false;
+    private token = '';
 
     subscribe(listener: () => void) {
         this.listeners.add(listener);
@@ -60,11 +97,19 @@ class NetClient {
     connect(name: string) {
         this.name = name;
         this.wanted = true;
-        if (this.ws && this.ws.readyState <= WebSocket.OPEN) {
-            this.send({ t: 'name', name });
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            // Still waiting for a free name, or renaming once we are in
+            if (this.state.status === 'online') this.send({ t: 'name', name });
+            else this.send(this.hello());
             return;
         }
+        if (this.ws && this.ws.readyState === WebSocket.CONNECTING) return;
         this.open();
+    }
+
+    private hello(): ClientMessage {
+        if (!this.token) this.token = tab_token();
+        return { t: 'hello', v: PROTOCOL_VERSION, name: this.name, token: this.token };
     }
 
     send(message: ClientMessage) {
@@ -80,7 +125,7 @@ class NetClient {
     /** Leave the current match view (after the score screen, or after quitting). */
     leave_match() {
         this.match_buffer = [];
-        this.update({ match: null, match_over: false });
+        this.update({ match: null, match_over: false, spectating: false });
     }
 
     clear_error() {
@@ -99,7 +144,7 @@ class NetClient {
 
         ws.onopen = () => {
             this.retry_ms = 1000;
-            ws.send(JSON.stringify({ t: 'hello', v: PROTOCOL_VERSION, name: this.name }));
+            ws.send(JSON.stringify(this.hello()));
             this.ping_timer = setInterval(() => this.send({ t: 'ping', c: performance.now() }), PING_INTERVAL_MS);
         };
         ws.onmessage = (event) => {
@@ -118,7 +163,14 @@ class NetClient {
             this.ping_timer = null;
             const lost_room = this.state.room !== null || this.state.match !== null;
             this.match_buffer = [];
-            this.update({ status: this.wanted ? 'offline' : 'idle', room: null, match: null, match_over: false });
+            this.hops.clear();
+            this.update({
+                status: this.wanted ? 'offline' : 'idle',
+                room: null,
+                match: null,
+                match_over: false,
+                spectating: false,
+            });
             if (lost_room) this.error('The connection to the server was lost.');
             if (this.wanted) {
                 this.retry_timer = setTimeout(() => this.open(), this.retry_ms);
@@ -130,8 +182,23 @@ class NetClient {
     private handle(message: ServerMessage) {
         switch (message.t) {
             case 'welcome':
-                this.update({ status: 'online', me: { id: message.id, name: message.name }, online: message.online });
+                this.update({
+                    status: 'online',
+                    me: { id: message.id, name: message.name },
+                    online: message.online,
+                    name_taken: null,
+                });
                 return;
+            case 'nameTaken':
+                this.update({ name_taken: message.name });
+                return;
+            case 'hop': {
+                let track = this.hops.get(message.id);
+                if (!track) this.hops.set(message.id, (track = []));
+                track.push({ sample: message.s, at: performance.now() });
+                if (track.length > HOP_SAMPLES_KEPT) track.shift();
+                return;
+            }
             case 'online':
                 this.update({ online: message.online });
                 return;
@@ -149,6 +216,12 @@ class NetClient {
                     this.match_buffer = [];
                 }
                 if (!room) patch.match = null;
+                // Forget the hops of members who left or switched bunnies; their bunny starts at its spot again
+                for (const id of this.hops.keys()) {
+                    const now_slot = room?.members.find((m) => m.id === id)?.slot ?? null;
+                    const old_slot = this.state.room?.members.find((m) => m.id === id)?.slot ?? null;
+                    if (now_slot === null || now_slot !== old_slot) this.hops.delete(id);
+                }
                 if (room && !this.had_room) history.replaceState(null, '', `/?room=${room.id}`);
                 if (!room && this.had_room) history.replaceState(null, '', '/');
                 this.had_room = room !== null;
@@ -162,8 +235,15 @@ class NetClient {
                 this.update({ rtt: this.state.rtt * 0.7 + (performance.now() - message.c) * 0.3 });
                 return;
             case 'load':
+                this.match_handler = null;
                 this.match_buffer = [];
-                this.update({ match: message.match, match_over: false });
+                this.update({ match: message.match, match_over: false, spectating: false });
+                return;
+            case 'watch':
+                this.match_handler = null;
+                this.match_buffer = [];
+                this.update({ match: message.match, match_over: false, spectating: true });
+                this.forward(message);
                 return;
             case 'dropped':
                 if (this.state.match?.id !== message.match) return;

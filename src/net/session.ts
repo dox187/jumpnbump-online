@@ -17,7 +17,7 @@ import {
     copy_state,
     hash_state,
 } from '../sim/sim';
-import { ClientMessage, FRAME_MS, HASH_INTERVAL, LeaveEvent, ServerMessage } from './protocol';
+import { COUNTDOWN_FRAMES, ClientMessage, FRAME_MS, HASH_INTERVAL, LeaveEvent, ServerMessage } from './protocol';
 
 /** The server's reported lead we aim for: inputs should arrive this many frames before they are needed. */
 const TARGET_LEAD = 1;
@@ -30,8 +30,14 @@ const MAX_UPDATE_GAP_MS = 250;
 /** Clock errors beyond this many frames are fixed by jumping instead of speeding up or slowing down. */
 const JUMP_THRESHOLD = 20;
 const INPUT_HISTORY = 256;
+/** Spectators show confirmed frames only, paced at 60 Hz, keeping this many frames in hand against jitter. */
+const SPECTATOR_BUFFER = 3;
+/** A spectator this many frames behind the newest confirmation catches up faster. */
+const SPECTATOR_MAX_BUFFER = 12;
+const SPECTATOR_STALL_MS = 500;
 
 export type SessionOptions = {
+    /** Our bunny, or -1 to watch as a spectator: no inputs, no prediction. */
     slot: number;
     state: SimState;
     map: BanMap;
@@ -42,6 +48,8 @@ export type SessionOptions = {
     fx?: SimFx | null;
     /** Called after every frame that is simulated for the first time, to advance cosmetic effects. */
     on_new_frame?: (state: SimState) => void;
+    /** Called with the confirmed state and its inputs right before each confirmed frame is simulated. */
+    on_confirm?: (state: SimState, packed: number) => void;
 };
 
 export type SessionStats = {
@@ -69,6 +77,9 @@ export class NetSession {
     private send: (message: ClientMessage) => void;
     private fx: SimFx | null;
     private on_new_frame: (state: SimState) => void;
+    private on_confirm: (state: SimState, packed: number) => void;
+    private readonly spectator: boolean;
+    private starved_ms = 0;
 
     private pending: number[] = [];
     private pending_first = 0;
@@ -108,6 +119,8 @@ export class NetSession {
         this.predicted_sim = new Sim(this.predicted, options.map, NO_CHEATS, options.end_score);
         this.fx = options.fx ? { ...options.fx, allow_kill_fx: this.allow_kill_fx } : null;
         this.on_new_frame = options.on_new_frame ?? (() => {});
+        this.on_confirm = options.on_confirm ?? (() => {});
+        this.spectator = options.slot < 0;
         this.last_time = options.now;
         this.pending_first = this.confirmed.frame;
         this.server_frame = this.confirmed.frame;
@@ -121,14 +134,15 @@ export class NetSession {
         return this.final_state !== null;
     }
 
-    /** The next local frame; it advances at 60 Hz while the match runs. */
+    /** The next local frame; it advances at 60 Hz while the match runs. Spectators see confirmed frames. */
     get frame() {
-        return this.local_frame;
+        return this.spectator ? this.confirmed.frame : this.local_frame;
     }
 
-    /** The state to draw: the final state once the match is over, the prediction before. */
+    /** The state to draw: the final state once the match is over, the prediction (or for spectators the
+     * confirmed state) before. */
     get view(): SimState {
-        return this.final_state ?? this.predicted;
+        return this.final_state ?? (this.spectator ? this.confirmed : this.predicted);
     }
 
     stats(): SessionStats {
@@ -181,6 +195,8 @@ export class NetSession {
                 return;
             }
             case 'over':
+                // The last confirmations may still be waiting; the final frames count for the replay
+                this.apply_confirmations();
                 this.final_state = clone_state(message.state);
                 this.dirty = true;
                 return;
@@ -190,6 +206,10 @@ export class NetSession {
     /** Advances the local clock, applies confirmations and re-predicts. Call once per animation frame. */
     update(now: number, local_mask: number) {
         if (this.finished) return;
+        if (this.spectator) {
+            this.update_spectator(now);
+            return;
+        }
         this.local_mask = local_mask & INPUT_MASK;
 
         let elapsed = now - this.last_time;
@@ -222,6 +242,27 @@ export class NetSession {
         this.apply_confirmations();
         if (this.confirmed.frame !== confirmed_before) this.dirty = true;
         if (this.dirty) this.predict();
+    }
+
+    /** Plays the confirmed frames back at 60 Hz a few frames behind the server, never predicting. */
+    private update_spectator(now: number) {
+        let elapsed = now - this.last_time;
+        this.last_time = now;
+        if (elapsed < 0) elapsed = 0;
+        if (elapsed > MAX_UPDATE_GAP_MS) elapsed = FRAME_MS;
+        this.accumulator += elapsed;
+        let due = Math.floor(this.accumulator / FRAME_MS);
+        this.accumulator -= due * FRAME_MS;
+        // Late confirmations make us wait, so a small buffer builds up by itself; a big one is caught up
+        const available = this.pending.length;
+        if (available > SPECTATOR_MAX_BUFFER) due = available - SPECTATOR_BUFFER;
+        this.starved_ms = available === 0 ? this.starved_ms + elapsed : 0;
+        this.stalled = this.starved_ms > SPECTATOR_STALL_MS;
+        if (due > 0) {
+            const before = this.confirmed.frame;
+            this.apply_confirmations(due);
+            if (this.confirmed.frame !== before) this.dirty = true;
+        }
     }
 
     private sample_input() {
@@ -261,8 +302,8 @@ export class NetSession {
         }
     }
 
-    private apply_confirmations() {
-        while (this.pending.length && !this.finished) {
+    private apply_confirmations(limit = Infinity) {
+        for (let applied = 0; applied < limit && this.pending.length && !this.finished; applied++) {
             const f = this.confirmed.frame;
             if (f !== this.pending_first) {
                 console.warn(`netcode: confirmed state at ${f} but pending inputs start at ${this.pending_first}`);
@@ -274,6 +315,7 @@ export class NetSession {
             this.pending_first++;
             if (f < this.predicted_until && this.predicted_inputs[f % INPUT_HISTORY] !== packed) this.mispredictions++;
             this.apply_leave_events(this.confirmed, f, true);
+            this.on_confirm(this.confirmed, packed);
 
             const first_time = f > this.fx_frame;
             this.confirmed_sim.fx = first_time ? this.fx : null;
@@ -283,7 +325,7 @@ export class NetSession {
                 this.on_new_frame(this.confirmed);
             }
             this.last_confirmed_input = packed;
-            if (this.confirmed.frame % HASH_INTERVAL === 0) {
+            if (!this.spectator && this.confirmed.frame % HASH_INTERVAL === 0) {
                 this.send({ t: 'h', f: this.confirmed.frame, h: hash_state(this.confirmed) });
             }
         }
@@ -302,7 +344,13 @@ export class NetSession {
         const shift = this.slot * INPUT_BITS;
         const remote = this.last_confirmed_input & ~(INPUT_MASK << shift);
         for (let f = this.confirmed.frame; f < this.local_frame; f++) {
-            const own = f >= this.local_frame - INPUT_HISTORY ? this.local_inputs[f % INPUT_HISTORY] : this.local_mask;
+            // The server ignores everybody's inputs during the countdown
+            const own =
+                f < COUNTDOWN_FRAMES
+                    ? 0
+                    : f >= this.local_frame - INPUT_HISTORY
+                      ? this.local_inputs[f % INPUT_HISTORY]
+                      : this.local_mask;
             const packed = remote | (own << shift);
             this.predicted_inputs[f % INPUT_HISTORY] = packed;
             this.apply_leave_events(this.predicted, f, false);
