@@ -83,7 +83,7 @@ export function dj_set_nosound(enable: number) {
 }
 
 export function dj_start_mod() {
-    if (context.info.no_sound) {
+    if (context.info.no_sound || context.info.no_music) {
         return;
     }
 

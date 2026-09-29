@@ -13,7 +13,7 @@ type ControlMapping = {
     mappings: (string | number)[];
 };
 
-const MAPPINGS: ControlMapping[] = [
+export const MAPPINGS: ControlMapping[] = [
     { id: 'keyboard_arrows', name: 'Keyboard (Arrow Keys)', type: 'keyboard', mappings: DEFAULT_CONTROLS[0].mappings },
     { id: 'keyboard_awd', name: 'Keyboard (A, W, D)', type: 'keyboard', mappings: DEFAULT_CONTROLS[1].mappings },
     { id: 'keyboard_jil', name: 'Keyboard (J, I, L)', type: 'keyboard', mappings: DEFAULT_CONTROLS[2].mappings },
@@ -45,7 +45,7 @@ const KNOWN_GAMEPAD_DEFAULTS: Array<{ pattern: string; defaults: { chrome?: stri
     },
 ];
 
-const getKnownGamepadDefaults = (gamepadId: string): string[] | null => {
+export const getKnownGamepadDefaults = (gamepadId: string): string[] | null => {
     const lowerGamepadId = gamepadId.toLowerCase();
     const known = KNOWN_GAMEPAD_DEFAULTS.find((k) => lowerGamepadId.includes(k.pattern.toLowerCase()));
     if (!known) return null;
@@ -53,12 +53,12 @@ const getKnownGamepadDefaults = (gamepadId: string): string[] | null => {
     return known.defaults[browser] ?? null;
 };
 
-const getFriendlyGamepadName = (gamepad: Gamepad) => {
+export const getFriendlyGamepadName = (gamepad: Gamepad) => {
     const id = gamepad.id.replace(/^[\da-zA-Z]+\-[\da-zA-Z]+\-/, '');
     return `${id} (${gamepad.index + 1})`;
 };
 
-const getGamepadId = (gamepad: Gamepad) => {
+export const getGamepadId = (gamepad: Gamepad) => {
     return gamepad.id + '_' + gamepad.index;
 };
 

@@ -6,3 +6,4 @@ dist
 .claude
 docs
 .superpowers
+dist-server

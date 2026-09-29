@@ -5,7 +5,11 @@ import ctx from '../context';
 
 const client_player_num = -1;
 
-function read_device_input(playerIndex: number, mappingIndex: number, gamepads: readonly (Gamepad | null)[]): boolean {
+export function read_device_input(
+    playerIndex: number,
+    mappingIndex: number,
+    gamepads: readonly (Gamepad | null)[]
+): boolean {
     const control = ctx.controls[playerIndex];
     if (!control) return false;
 

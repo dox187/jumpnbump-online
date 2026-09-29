@@ -1,6 +1,4 @@
-import { BAN } from './constants';
-
-const LEVEL_SCALE_FACTOR = 4;
+import { BanMap, create_ban_map } from './sim/ban-map';
 
 let ban_map = [
     [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -22,27 +20,25 @@ let ban_map = [
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 ];
 
+let current_ban_map: BanMap = create_ban_map(ban_map);
+
 export function SET_BAN_MAP(map: number[][]) {
     ban_map = map;
+    current_ban_map = create_ban_map(map);
+}
+
+export function get_ban_map(): BanMap {
+    return current_ban_map;
 }
 
 export function GET_BAN_MAP_XY(x: number, y: number) {
-    if (y < 0) y = 0;
-    try {
-        return ban_map[y >> LEVEL_SCALE_FACTOR][x >> LEVEL_SCALE_FACTOR];
-    } catch (e) {
-        throw new Error('GET_BAN_MAP_XY failed: ' + x + ',' + y);
-    }
+    return current_ban_map.xy(x, y);
 }
 
 export function GET_BAN_MAP_TILE(pos_y, pos_x) {
-    if (pos_y < 0) pos_y = 0;
-    return ban_map[pos_y][pos_x];
+    return current_ban_map.tile(pos_y, pos_x);
 }
 
 export function GET_BAN_MAP_IN_WATER(s1: number, s2: number) {
-    return (
-        (GET_BAN_MAP_XY(s1, s2 + 7) == BAN.VOID || GET_BAN_MAP_XY(s1 + 15, s2 + 7) == BAN.VOID) &&
-        (GET_BAN_MAP_XY(s1, s2 + 8) == BAN.WATER || GET_BAN_MAP_XY(s1 + 15, s2 + 8) == BAN.WATER)
-    );
+    return current_ban_map.in_water(s1, s2);
 }

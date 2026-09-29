@@ -121,7 +121,8 @@ export function add_score(player: number, position: number, x: number, y: number
         image: image,
         pob_data: pob_data,
     };
-    scores.pobs.push(pob);
+    // One slot per digit, like the C version, so the list does not grow with every bump
+    scores.pobs[player * 2 + position] = pob;
 }
 
 export function add_leftovers(player: number, x: number, y: number, image: number, pob_data: Gob) {
@@ -188,8 +189,14 @@ export function draw_leftovers(page: number) {
 }
 
 export function draw_score() {
-    for (let c1 = 0; c1 < scores.pobs.length; c1++)
+    for (let c1 = 0; c1 < scores.pobs.length; c1++) {
+        if (!scores.pobs[c1]) continue;
         put_pob(0, scores.pobs[c1].x, scores.pobs[c1].y, scores.pobs[c1].image, scores.pobs[c1].pob_data, 1, mask_pic);
+    }
+}
+
+export function clear_scores() {
+    scores.pobs = [];
 }
 
 function get_closest_player_to_point(x: number, y: number) {

@@ -7,8 +7,18 @@ let lastTick = 0;
 const TICK_LENGTH = 1000 / 60;
 
 const keyb: Record<string, boolean> = {};
+/** Keys that went down during the latest intr_sysupdate, so taps shorter than a frame are not lost. */
+const went_down = new Set<string>();
 
 export const last_keys: string[] = new Array(50);
+
+const AI_HOTKEYS = [KEY.ONE, KEY.TWO, KEY.THREE, KEY.FOUR];
+let ai_hotkeys_enabled = true;
+
+/** Online matches must not let the 1-4 keys hand a bunny to the computer. */
+export function set_ai_hotkeys_enabled(enabled: boolean) {
+    ai_hotkeys_enabled = enabled;
+}
 
 function add_last_key(key: string) {
     for (let i = 49; i > 0; i--) {
@@ -25,6 +35,10 @@ export function key_pressed(key: string) {
     return keyb[key];
 }
 
+export function key_went_down(key: string) {
+    return went_down.has(key);
+}
+
 export function mouse_button_pressed(button: number): boolean {
     return get_mouse_buttons()[button] ?? false;
 }
@@ -38,14 +52,17 @@ export function intr_sysupdate(): number {
         lastTick = getTicks();
     }
 
+    went_down.clear();
     for (const event of poll_events()) {
+        if (event.type === 'keydown' && !event.repeat) went_down.add(event.scancode);
         switch (event.type) {
             case 'keydown':
             case 'keyup':
                 if (event.repeat) {
                     continue;
                 }
-                switch (event.scancode) {
+                const is_ai_hotkey = AI_HOTKEYS.includes(event.scancode as KEY);
+                switch (ai_hotkeys_enabled || !is_ai_hotkey ? event.scancode : '') {
                     case KEY.ONE:
                         if (event.type === 'keydown') {
                             ctx.ai[0] = !ctx.ai[0] ? 1 : 0;

@@ -5,6 +5,7 @@ import './app.css';
 
 const About = lazy(() => import('./pages/about'));
 const Levels = lazy(() => import('./pages/levels'));
+const Online = lazy(() => import('./pages/online'));
 const Play = lazy(() => import('./pages/play'));
 const Secrets = lazy(() => import('./pages/secrets'));
 const NotFound = () => <div>404 - Not Found</div>;
@@ -14,7 +15,8 @@ function App() {
         <LocationProvider>
             <ErrorBoundary>
                 <Router>
-                    <Route path="/" component={Play} />
+                    <Route path="/" component={Online} />
+                    <Route path="/local" component={Play} />
                     <Route path="/levels/:page?" component={Levels} />
                     <Route path="/about" component={About} />
                     <Route path="/secrets" component={Secrets} />

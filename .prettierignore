@@ -3,3 +3,5 @@ lib
 public
 node_modules
 package-lock.json
+dist-server
+portainer-stack.yml

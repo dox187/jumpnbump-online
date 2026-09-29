@@ -48,6 +48,7 @@ type GameContext = {
         mouse_enabled: boolean;
         no_sound: boolean;
         music_no_sound: boolean;
+        no_music: boolean;
         no_gore: boolean;
         error_str: string;
         draw_page: number;
@@ -78,6 +79,7 @@ const getDefaultContext: () => GameContext = () => ({
         mouse_enabled: false,
         no_sound: false,
         music_no_sound: false,
+        no_music: false,
         no_gore: false,
         error_str: '',
         draw_page: 0,

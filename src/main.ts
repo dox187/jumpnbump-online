@@ -32,10 +32,8 @@ import {
 } from './sdl/sound';
 import { update_player_actions } from './sdl/input';
 import { addkey, intr_sysupdate, key_pressed } from './sdl/interrpt';
-import { GET_BAN_MAP_IN_WATER, GET_BAN_MAP_TILE, GET_BAN_MAP_XY, SET_BAN_MAP } from './level';
+import { GET_BAN_MAP_TILE, SET_BAN_MAP, get_ban_map } from './level';
 import {
-    serverSendAlive,
-    serverSendKillPacket,
     serverTellEveryoneGoodbye,
     tellServerGoodbye,
     tellServerNewPosition,
@@ -73,6 +71,8 @@ import { run_in_frame_loop } from './loop';
 import { deinit_controls_listener, init_controls_listener } from './sdl/events';
 import { Pob, register_gob, get_gob } from './assets';
 import { GameInputDevice } from 'inputs';
+import { Sim, create_state } from './sim/sim';
+import { local_fx } from './fx';
 
 let endscore_reached = 0;
 
@@ -87,85 +87,19 @@ let server_said_bye = 0;
 
 let flies_enabled = true;
 
-function player_kill(c1: number, c2: number) {
-    const player = ctx.player;
-    if (player[c1].y_add >= 0) {
-        if (is_server) serverSendKillPacket(c1, c2);
-    } else {
-        if (player[c2].y_add < 0) player[c2].y_add = 0;
-    }
+const local_sim_instance = new Sim(create_state(1), get_ban_map());
+
+/** The shared simulation, pointed at the global context of the local game. */
+function local_sim() {
+    local_sim_instance.state.player = ctx.player;
+    local_sim_instance.map = get_ban_map();
+    local_sim_instance.cheats = cheats;
+    local_sim_instance.fx = local_fx;
+    return local_sim_instance;
 }
 
 function collision_check() {
-    const player = ctx.player;
-    let c1 = 0,
-        c2 = 0,
-        c3 = 0;
-    let l1;
-
-    /* collision check */
-    for (c3 = 0; c3 < 6; c3++) {
-        if (c3 == 0) {
-            c1 = 0;
-            c2 = 1;
-        } else if (c3 == 1) {
-            c1 = 0;
-            c2 = 2;
-        } else if (c3 == 2) {
-            c1 = 0;
-            c2 = 3;
-        } else if (c3 == 3) {
-            c1 = 1;
-            c2 = 2;
-        } else if (c3 == 4) {
-            c1 = 1;
-            c2 = 3;
-        } else if (c3 == 5) {
-            c1 = 2;
-            c2 = 3;
-        }
-        if (player[c1].enabled && player[c2].enabled) {
-            if (Math.abs(player[c1].x - player[c2].x) < 12 << 16 && Math.abs(player[c1].y - player[c2].y) < 12 << 16) {
-                if (Math.abs(player[c1].y - player[c2].y) >> 16 > 5) {
-                    if (player[c1].y < player[c2].y) {
-                        player_kill(c1, c2);
-                    } else {
-                        player_kill(c2, c1);
-                    }
-                } else {
-                    if (player[c1].x < player[c2].x) {
-                        if (player[c1].x_add > 0) {
-                            player[c1].x = player[c2].x - (12 << 16);
-                        } else if (player[c2].x_add < 0) {
-                            player[c2].x = player[c1].x + (12 << 16);
-                        } else {
-                            player[c1].x -= player[c1].x_add;
-                            player[c2].x -= player[c2].x_add;
-                        }
-                        l1 = player[c2].x_add;
-                        player[c2].x_add = player[c1].x_add;
-                        player[c1].x_add = l1;
-                        if (player[c1].x_add > 0) player[c1].x_add = -player[c1].x_add;
-                        if (player[c2].x_add < 0) player[c2].x_add = -player[c2].x_add;
-                    } else {
-                        if (player[c1].x_add > 0) {
-                            player[c2].x = player[c1].x - (12 << 16);
-                        } else if (player[c2].x_add < 0) {
-                            player[c1].x = player[c2].x + (12 << 16);
-                        } else {
-                            player[c1].x -= player[c1].x_add;
-                            player[c2].x -= player[c2].x_add;
-                        }
-                        l1 = player[c2].x_add;
-                        player[c2].x_add = player[c1].x_add;
-                        player[c1].x_add = l1;
-                        if (player[c1].x_add < 0) player[c1].x_add = -player[c1].x_add;
-                        if (player[c2].x_add > 0) player[c2].x_add = -player[c2].x_add;
-                    }
-                }
-            }
-        }
-    }
+    local_sim().collision_check();
 }
 
 async function game_loop() {
@@ -564,98 +498,6 @@ export async function main(canvas: HTMLCanvasElement, options: MainOptions): Pro
     return result;
 }
 
-function player_action_left(c1: number) {
-    const player = ctx.player;
-    let s1 = 0,
-        s2 = 0;
-    let below_left, below, below_right;
-
-    s1 = player[c1].x >> 16;
-    s2 = player[c1].y >> 16;
-    below_left = GET_BAN_MAP_XY(s1, s2 + 16);
-    below = GET_BAN_MAP_XY(s1 + 8, s2 + 16);
-    below_right = GET_BAN_MAP_XY(s1 + 15, s2 + 16);
-
-    if (below == BAN.ICE) {
-        if (player[c1].x_add > 0) player[c1].x_add -= 1024;
-        else player[c1].x_add -= 768;
-    } else if (
-        (below_left != BAN.SOLID && below_right == BAN.ICE) ||
-        (below_left == BAN.ICE && below_right != BAN.SOLID)
-    ) {
-        if (player[c1].x_add > 0) player[c1].x_add -= 1024;
-        else player[c1].x_add -= 768;
-    } else {
-        if (player[c1].x_add > 0) {
-            player[c1].x_add -= 16384;
-            if (player[c1].x_add > -98304 && player[c1].in_water == 0 && below == BAN.SOLID)
-                add_object(
-                    OBJ.SMOKE,
-                    (player[c1].x >> 16) + 2 + rnd(9),
-                    (player[c1].y >> 16) + 13 + rnd(5),
-                    0,
-                    -16384 - rnd(8192),
-                    OBJ_ANIM.SMOKE,
-                    0
-                );
-        } else player[c1].x_add -= 12288;
-    }
-    if (player[c1].x_add < -98304) player[c1].x_add = -98304;
-    player[c1].direction = 1;
-    if (player[c1].anim == 0) {
-        player[c1].anim = 1;
-        player[c1].frame = 0;
-        player[c1].frame_tick = 0;
-        player[c1].image = player_anims[player[c1].anim].frame[player[c1].frame].image + player[c1].direction * 9;
-    }
-}
-
-function player_action_right(c1: number) {
-    const player = ctx.player;
-    let s1 = 0,
-        s2 = 0;
-    let below_left, below, below_right;
-
-    s1 = player[c1].x >> 16;
-    s2 = player[c1].y >> 16;
-    below_left = GET_BAN_MAP_XY(s1, s2 + 16);
-    below = GET_BAN_MAP_XY(s1 + 8, s2 + 16);
-    below_right = GET_BAN_MAP_XY(s1 + 15, s2 + 16);
-
-    if (below == BAN.ICE) {
-        if (player[c1].x_add < 0) player[c1].x_add += 1024;
-        else player[c1].x_add += 768;
-    } else if (
-        (below_left != BAN.SOLID && below_right == BAN.ICE) ||
-        (below_left == BAN.ICE && below_right != BAN.SOLID)
-    ) {
-        if (player[c1].x_add > 0) player[c1].x_add += 1024;
-        else player[c1].x_add += 768;
-    } else {
-        if (player[c1].x_add < 0) {
-            player[c1].x_add += 16384;
-            if (player[c1].x_add < 98304 && player[c1].in_water == 0 && below == BAN.SOLID)
-                add_object(
-                    OBJ.SMOKE,
-                    (player[c1].x >> 16) + 2 + rnd(9),
-                    (player[c1].y >> 16) + 13 + rnd(5),
-                    0,
-                    -16384 - rnd(8192),
-                    OBJ_ANIM.SMOKE,
-                    0
-                );
-        } else player[c1].x_add += 12288;
-    }
-    if (player[c1].x_add > 98304) player[c1].x_add = 98304;
-    player[c1].direction = 0;
-    if (player[c1].anim == 0) {
-        player[c1].anim = 1;
-        player[c1].frame = 0;
-        player[c1].frame_tick = 0;
-        player[c1].image = player_anims[player[c1].anim].frame[player[c1].frame].image + player[c1].direction * 9;
-    }
-}
-
 function map_tile(pos_x: number, pos_y: number) {
     let tile;
 
@@ -837,414 +679,12 @@ function cpu_move() {
 }
 
 function steer_players() {
-    let c1, c2;
-    let s1 = 0,
-        s2 = 0;
-
-    const player = ctx.player;
-    const objects = ctx.objects;
     cpu_move();
     update_player_actions();
-
-    for (c1 = 0; c1 < JNB_MAX_PLAYERS; c1++) {
-        if (player[c1].enabled) {
-            if (!player[c1].dead_flag) {
-                if (player[c1].action_left && player[c1].action_right) {
-                    if (player[c1].direction == 0) {
-                        if (player[c1].action_right) {
-                            player_action_right(c1);
-                        }
-                    } else {
-                        if (player[c1].action_left) {
-                            player_action_left(c1);
-                        }
-                    }
-                } else if (player[c1].action_left) {
-                    player_action_left(c1);
-                } else if (player[c1].action_right) {
-                    player_action_right(c1);
-                } else if (!player[c1].action_left && !player[c1].action_right) {
-                    let below_left, below, below_right;
-
-                    s1 = player[c1].x >> 16;
-                    s2 = player[c1].y >> 16;
-                    below_left = GET_BAN_MAP_XY(s1, s2 + 16);
-                    below = GET_BAN_MAP_XY(s1 + 8, s2 + 16);
-                    below_right = GET_BAN_MAP_XY(s1 + 15, s2 + 16);
-                    if (
-                        below == BAN.SOLID ||
-                        below == BAN.SPRING ||
-                        ((below_left == BAN.SOLID || below_left == BAN.SPRING) && below_right != BAN.ICE) ||
-                        (below_left != BAN.ICE && (below_right == BAN.SOLID || below_right == BAN.SPRING))
-                    ) {
-                        if (player[c1].x_add < 0) {
-                            player[c1].x_add += 16384;
-                            if (player[c1].x_add > 0) player[c1].x_add = 0;
-                        } else {
-                            player[c1].x_add -= 16384;
-                            if (player[c1].x_add < 0) player[c1].x_add = 0;
-                        }
-                        if (player[c1].x_add != 0 && GET_BAN_MAP_XY(s1 + 8, s2 + 16) == BAN.SOLID)
-                            add_object(
-                                OBJ.SMOKE,
-                                (player[c1].x >> 16) + 2 + rnd(9),
-                                (player[c1].y >> 16) + 13 + rnd(5),
-                                0,
-                                -16384 - rnd(8192),
-                                OBJ_ANIM.SMOKE,
-                                0
-                            );
-                    }
-                    if (player[c1].anim == 1) {
-                        player[c1].anim = 0;
-                        player[c1].frame = 0;
-                        player[c1].frame_tick = 0;
-                        player[c1].image =
-                            player_anims[player[c1].anim].frame[player[c1].frame].image + player[c1].direction * 9;
-                    }
-                }
-                if (!cheats.jetpack) {
-                    /* no jetpack */
-                    if (cheats.pogostick || (player[c1].jump_ready == 1 && player[c1].action_up)) {
-                        s1 = player[c1].x >> 16;
-                        s2 = player[c1].y >> 16;
-                        if (s2 < -16) s2 = -16;
-                        /* jump */
-                        if (
-                            GET_BAN_MAP_XY(s1, s2 + 16) == BAN.SOLID ||
-                            GET_BAN_MAP_XY(s1, s2 + 16) == BAN.ICE ||
-                            GET_BAN_MAP_XY(s1 + 15, s2 + 16) == BAN.SOLID ||
-                            GET_BAN_MAP_XY(s1 + 15, s2 + 16) == BAN.ICE
-                        ) {
-                            player[c1].y_add = -280000;
-                            player[c1].anim = 2;
-                            player[c1].frame = 0;
-                            player[c1].frame_tick = 0;
-                            player[c1].image =
-                                player_anims[player[c1].anim].frame[player[c1].frame].image + player[c1].direction * 9;
-                            player[c1].jump_ready = 0;
-                            player[c1].jump_abort = 1;
-                            if (!cheats.pogostick) {
-                                dj_play_sfx(SFX.JUMP, SFX_FREQ.JUMP + rnd(2000) - 1000, 64, 0, 0, -1);
-                            } else {
-                                dj_play_sfx(SFX.SPRING, SFX_FREQ.SPRING + rnd(2000) - 1000, 64, 0, 0, -1);
-                            }
-                        }
-                        /* jump out of water */
-                        if (GET_BAN_MAP_IN_WATER(s1, s2)) {
-                            player[c1].y_add = -196608;
-                            player[c1].in_water = 0;
-                            player[c1].anim = 2;
-                            player[c1].frame = 0;
-                            player[c1].frame_tick = 0;
-                            player[c1].image =
-                                player_anims[player[c1].anim].frame[player[c1].frame].image + player[c1].direction * 9;
-                            player[c1].jump_ready = 0;
-                            player[c1].jump_abort = 1;
-                            if (!cheats.pogostick) {
-                                dj_play_sfx(SFX.JUMP, SFX_FREQ.JUMP + rnd(2000) - 1000, 64, 0, 0, -1);
-                            } else {
-                                dj_play_sfx(SFX.SPRING, SFX_FREQ.SPRING + rnd(2000) - 1000, 64, 0, 0, -1);
-                            }
-                        }
-                    }
-                    /* fall down by gravity */
-                    if (!cheats.pogostick && !player[c1].action_up) {
-                        player[c1].jump_ready = 1;
-                        if (player[c1].in_water == 0 && player[c1].y_add < 0 && player[c1].jump_abort == 1) {
-                            if (!cheats.bunnies_in_space) {
-                                /* normal gravity */
-                                player[c1].y_add += 32768;
-                            } else {
-                                /* light gravity */
-                                player[c1].y_add += 16384;
-                            }
-                            if (player[c1].y_add > 0) {
-                                player[c1].y_add = 0;
-                            }
-                        }
-                    }
-                } else {
-                    /* with jetpack */
-                    if (player[c1].action_up) {
-                        player[c1].y_add -= 16384;
-                        if (player[c1].y_add < -400000) player[c1].y_add = -400000;
-                        if (GET_BAN_MAP_IN_WATER(s1, s2)) player[c1].in_water = 0;
-                        if (rnd(100) < 50)
-                            add_object(
-                                OBJ.SMOKE,
-                                (player[c1].x >> 16) + 6 + rnd(5),
-                                (player[c1].y >> 16) + 10 + rnd(5),
-                                0,
-                                16384 + rnd(8192),
-                                OBJ_ANIM.SMOKE,
-                                0
-                            );
-                    }
-                }
-
-                player[c1].x += player[c1].x_add;
-                if (player[c1].x >> 16 < 0) {
-                    player[c1].x = 0;
-                    player[c1].x_add = 0;
-                }
-                if ((player[c1].x >> 16) + 15 > 351) {
-                    player[c1].x = 336 << 16;
-                    player[c1].x_add = 0;
-                }
-                {
-                    if (player[c1].y > 0) {
-                        s2 = player[c1].y >> 16;
-                    } else {
-                        /* check top line only */
-                        s2 = 0;
-                    }
-
-                    s1 = player[c1].x >> 16;
-                    if (
-                        GET_BAN_MAP_XY(s1, s2) == BAN.SOLID ||
-                        GET_BAN_MAP_XY(s1, s2) == BAN.ICE ||
-                        GET_BAN_MAP_XY(s1, s2) == BAN.SPRING ||
-                        GET_BAN_MAP_XY(s1, s2 + 15) == BAN.SOLID ||
-                        GET_BAN_MAP_XY(s1, s2 + 15) == BAN.ICE ||
-                        GET_BAN_MAP_XY(s1, s2 + 15) == BAN.SPRING
-                    ) {
-                        player[c1].x = ((s1 + 16) & 0xfff0) << 16;
-                        player[c1].x_add = 0;
-                    }
-
-                    s1 = player[c1].x >> 16;
-                    if (
-                        GET_BAN_MAP_XY(s1 + 15, s2) == BAN.SOLID ||
-                        GET_BAN_MAP_XY(s1 + 15, s2) == BAN.ICE ||
-                        GET_BAN_MAP_XY(s1 + 15, s2) == BAN.SPRING ||
-                        GET_BAN_MAP_XY(s1 + 15, s2 + 15) == BAN.SOLID ||
-                        GET_BAN_MAP_XY(s1 + 15, s2 + 15) == BAN.ICE ||
-                        GET_BAN_MAP_XY(s1 + 15, s2 + 15) == BAN.SPRING
-                    ) {
-                        player[c1].x = (((s1 + 16) & 0xfff0) - 16) << 16;
-                        player[c1].x_add = 0;
-                    }
-                }
-
-                player[c1].y += player[c1].y_add;
-
-                s1 = player[c1].x >> 16;
-                s2 = player[c1].y >> 16;
-                if (s2 < 0) s2 = 0;
-                if (
-                    GET_BAN_MAP_XY(s1 + 8, s2 + 15) == BAN.SPRING ||
-                    (GET_BAN_MAP_XY(s1, s2 + 15) == BAN.SPRING && GET_BAN_MAP_XY(s1 + 15, s2 + 15) != BAN.SOLID) ||
-                    (GET_BAN_MAP_XY(s1, s2 + 15) != BAN.SOLID && GET_BAN_MAP_XY(s1 + 15, s2 + 15) == BAN.SPRING)
-                ) {
-                    player[c1].y = ((player[c1].y >> 16) & 0xfff0) << 16;
-                    player[c1].y_add = -400000;
-                    player[c1].anim = 2;
-                    player[c1].frame = 0;
-                    player[c1].frame_tick = 0;
-                    player[c1].image =
-                        player_anims[player[c1].anim].frame[player[c1].frame].image + player[c1].direction * 9;
-                    player[c1].jump_ready = 0;
-                    player[c1].jump_abort = 0;
-                    for (c2 = 0; c2 < NUM.OBJECTS; c2++) {
-                        if (objects[c2].used == 1 && objects[c2].type == OBJ.SPRING) {
-                            if (GET_BAN_MAP_XY(s1 + 8, s2 + 15) == BAN.SPRING) {
-                                if (objects[c2].x >> 20 == (s1 + 8) >> 4 && objects[c2].y >> 20 == (s2 + 15) >> 4) {
-                                    objects[c2].frame = 0;
-                                    objects[c2].ticks = object_anims[objects[c2].anim].frame[objects[c2].frame].ticks;
-                                    objects[c2].image = object_anims[objects[c2].anim].frame[objects[c2].frame].image;
-                                    break;
-                                }
-                            } else {
-                                if (GET_BAN_MAP_XY(s1, s2 + 15) == BAN.SPRING) {
-                                    if (objects[c2].x >> 20 == s1 >> 4 && objects[c2].y >> 20 == (s2 + 15) >> 4) {
-                                        objects[c2].frame = 0;
-                                        objects[c2].ticks =
-                                            object_anims[objects[c2].anim].frame[objects[c2].frame].ticks;
-                                        objects[c2].image =
-                                            object_anims[objects[c2].anim].frame[objects[c2].frame].image;
-                                        break;
-                                    }
-                                } else if (GET_BAN_MAP_XY(s1 + 15, s2 + 15) == BAN.SPRING) {
-                                    if (
-                                        objects[c2].x >> 20 == (s1 + 15) >> 4 &&
-                                        objects[c2].y >> 20 == (s2 + 15) >> 4
-                                    ) {
-                                        objects[c2].frame = 0;
-                                        objects[c2].ticks =
-                                            object_anims[objects[c2].anim].frame[objects[c2].frame].ticks;
-                                        objects[c2].image =
-                                            object_anims[objects[c2].anim].frame[objects[c2].frame].image;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    dj_play_sfx(SFX.SPRING, SFX_FREQ.SPRING + rnd(2000) - 1000, 64, 0, 0, -1);
-                }
-                s1 = player[c1].x >> 16;
-                s2 = player[c1].y >> 16;
-                if (s2 < 0) s2 = 0;
-                if (
-                    GET_BAN_MAP_XY(s1, s2) == BAN.SOLID ||
-                    GET_BAN_MAP_XY(s1, s2) == BAN.ICE ||
-                    GET_BAN_MAP_XY(s1, s2) == BAN.SPRING ||
-                    GET_BAN_MAP_XY(s1 + 15, s2) == BAN.SOLID ||
-                    GET_BAN_MAP_XY(s1 + 15, s2) == BAN.ICE ||
-                    GET_BAN_MAP_XY(s1 + 15, s2) == BAN.SPRING
-                ) {
-                    player[c1].y = ((s2 + 16) & 0xfff0) << 16;
-                    player[c1].y_add = 0;
-                    player[c1].anim = 0;
-                    player[c1].frame = 0;
-                    player[c1].frame_tick = 0;
-                    player[c1].image =
-                        player_anims[player[c1].anim].frame[player[c1].frame].image + player[c1].direction * 9;
-                }
-                s1 = player[c1].x >> 16;
-                s2 = player[c1].y >> 16;
-                if (s2 < 0) s2 = 0;
-                if (GET_BAN_MAP_XY(s1 + 8, s2 + 8) == BAN.WATER) {
-                    if (player[c1].in_water == 0) {
-                        /* falling into water */
-                        player[c1].in_water = 1;
-                        player[c1].anim = 4;
-                        player[c1].frame = 0;
-                        player[c1].frame_tick = 0;
-                        player[c1].image =
-                            player_anims[player[c1].anim].frame[player[c1].frame].image + player[c1].direction * 9;
-                        if (player[c1].y_add >= 32768) {
-                            add_object(
-                                OBJ.SPLASH,
-                                (player[c1].x >> 16) + 8,
-                                ((player[c1].y >> 16) & 0xfff0) + 15,
-                                0,
-                                0,
-                                OBJ_ANIM.SPLASH,
-                                0
-                            );
-                            if (!cheats.blood_is_thicker_than_water)
-                                dj_play_sfx(SFX.SPLASH, SFX_FREQ.SPLASH + rnd(2000) - 1000, 64, 0, 0, -1);
-                            else dj_play_sfx(SFX.SPLASH, SFX_FREQ.SPLASH + rnd(2000) - 5000, 64, 0, 0, -1);
-                        }
-                    }
-                    /* slowly move up to water surface */
-                    player[c1].y_add -= 1536;
-                    if (player[c1].y_add < 0 && player[c1].anim != 5) {
-                        player[c1].anim = 5;
-                        player[c1].frame = 0;
-                        player[c1].frame_tick = 0;
-                        player[c1].image =
-                            player_anims[player[c1].anim].frame[player[c1].frame].image + player[c1].direction * 9;
-                    }
-                    if (player[c1].y_add < -65536) player[c1].y_add = -65536;
-                    if (player[c1].y_add > 65535) player[c1].y_add = 65535;
-                    if (
-                        GET_BAN_MAP_XY(s1, s2 + 15) == BAN.SOLID ||
-                        GET_BAN_MAP_XY(s1, s2 + 15) == BAN.ICE ||
-                        GET_BAN_MAP_XY(s1 + 15, s2 + 15) == BAN.SOLID ||
-                        GET_BAN_MAP_XY(s1 + 15, s2 + 15) == BAN.ICE
-                    ) {
-                        player[c1].y = (((s2 + 16) & 0xfff0) - 16) << 16;
-                        player[c1].y_add = 0;
-                    }
-                } else if (
-                    GET_BAN_MAP_XY(s1, s2 + 15) == BAN.SOLID ||
-                    GET_BAN_MAP_XY(s1, s2 + 15) == BAN.ICE ||
-                    GET_BAN_MAP_XY(s1, s2 + 15) == BAN.SPRING ||
-                    GET_BAN_MAP_XY(s1 + 15, s2 + 15) == BAN.SOLID ||
-                    GET_BAN_MAP_XY(s1 + 15, s2 + 15) == BAN.ICE ||
-                    GET_BAN_MAP_XY(s1 + 15, s2 + 15) == BAN.SPRING
-                ) {
-                    player[c1].in_water = 0;
-                    player[c1].y = (((s2 + 16) & 0xfff0) - 16) << 16;
-                    player[c1].y_add = 0;
-                    if (player[c1].anim != 0 && player[c1].anim != 1) {
-                        player[c1].anim = 0;
-                        player[c1].frame = 0;
-                        player[c1].frame_tick = 0;
-                        player[c1].image =
-                            player_anims[player[c1].anim].frame[player[c1].frame].image + player[c1].direction * 9;
-                    }
-                } else {
-                    if (player[c1].in_water == 0) {
-                        if (!cheats.bunnies_in_space) player[c1].y_add += 12288;
-                        else player[c1].y_add += 6144;
-                        if (player[c1].y_add > 327680) player[c1].y_add = 327680;
-                    } else {
-                        player[c1].y = (player[c1].y & 0xffff0000) + 0x10000;
-                        player[c1].y_add = 0;
-                    }
-                    player[c1].in_water = 0;
-                }
-                if (player[c1].y_add > 36864 && player[c1].anim != 3 && !player[c1].in_water) {
-                    player[c1].anim = 3;
-                    player[c1].frame = 0;
-                    player[c1].frame_tick = 0;
-                    player[c1].image =
-                        player_anims[player[c1].anim].frame[player[c1].frame].image + player[c1].direction * 9;
-                }
-            }
-
-            player[c1].frame_tick++;
-            if (player[c1].frame_tick >= player_anims[player[c1].anim].frame[player[c1].frame].ticks) {
-                player[c1].frame++;
-                if (player[c1].frame >= player_anims[player[c1].anim].num_frames) {
-                    if (player[c1].anim != 6) player[c1].frame = player_anims[player[c1].anim].restart_frame;
-                    else position_player(c1);
-                }
-                player[c1].frame_tick = 0;
-            }
-            player[c1].image = player_anims[player[c1].anim].frame[player[c1].frame].image + player[c1].direction * 9;
-        }
-    }
+    local_sim().steer_players();
 }
 
-function position_player(player_num: number) {
-    const player = ctx.player;
-    let c1;
-    let s1, s2;
-
-    while (1) {
-        while (1) {
-            s1 = rnd(22);
-            s2 = rnd(16);
-            if (
-                GET_BAN_MAP_TILE(s2, s1) == BAN.VOID &&
-                (GET_BAN_MAP_TILE(s2 + 1, s1) == BAN.SOLID || GET_BAN_MAP_TILE(s2 + 1, s1) == BAN.ICE)
-            )
-                break;
-        }
-        for (c1 = 0; c1 < JNB_MAX_PLAYERS; c1++) {
-            if (c1 != player_num && player[c1].enabled) {
-                if (Math.abs((s1 << 4) - (player[c1].x >> 16)) < 32 && Math.abs((s2 << 4) - (player[c1].y >> 16)) < 32)
-                    break;
-            }
-        }
-        if (c1 == JNB_MAX_PLAYERS) {
-            player[player_num].x = s1 << 20;
-            player[player_num].y = s2 << 20;
-            player[player_num].x_add = player[player_num].y_add = 0;
-            player[player_num].direction = 0;
-            player[player_num].jump_ready = 1;
-            player[player_num].in_water = 0;
-            player[player_num].anim = 0;
-            player[player_num].frame = 0;
-            player[player_num].frame_tick = 0;
-            player[player_num].image = player_anims[player[player_num].anim].frame[player[player_num].frame].image;
-
-            if (is_server) {
-                if (is_net) serverSendAlive(player_num);
-                player[player_num].dead_flag = false;
-            }
-
-            break;
-        }
-    }
-}
-
-function update_objects() {
+export function update_objects() {
     const main_info = ctx.info;
     const objects = ctx.objects;
     const object_gobs = get_gob('objects');
@@ -1632,27 +1072,25 @@ function update_objects() {
 }
 
 async function init_level(level: number, pal: Uint8ClampedArray): Promise<number> {
-    const player = ctx.player;
+    init_level_scene(pal);
+
+    local_sim().state.rng = Math.floor(Math.random() * 0xffffffff) >>> 0 || 1;
+    local_sim().init_players();
+
+    return 0;
+}
+
+/** Loads the level graphics and places the springs and butterflies (everything but the players). */
+export function init_level_scene(pal: Uint8ClampedArray) {
     const objects = ctx.objects;
     let c1, c2;
     let s1, s2;
 
     let background_pic = read_pcx('level.pcx', pal);
     let mask_pic = read_pcx('mask.pcx', null);
-    const number_gobs = get_gob('numbers');
 
     register_background(background_pic, pal);
     register_mask(mask_pic, pal);
-
-    for (c1 = 0; c1 < JNB_MAX_PLAYERS; c1++) {
-        if (player[c1].enabled) {
-            player[c1].bumps = 0;
-            for (c2 = 0; c2 < JNB_MAX_PLAYERS; c2++) player[c1].bumped[c2] = 0;
-            position_player(c1);
-            add_score(c1, 0, 360, 34 + c1 * 64, 0, number_gobs);
-            add_score(c1, 1, 376, 34 + c1 * 64, 0, number_gobs);
-        }
-    }
 
     for (c1 = 0; c1 < NUM.OBJECTS; c1++) objects[c1].used = 0;
 
@@ -1728,8 +1166,6 @@ async function init_level(level: number, pal: Uint8ClampedArray): Promise<number
             break;
         }
     }
-
-    return 0;
 }
 
 function deinit_level() {
@@ -1737,7 +1173,7 @@ function deinit_level() {
     dj_stop_mod();
 }
 
-function init_program(canvas: HTMLCanvasElement, datafile: ArrayBuffer, pal: Uint8ClampedArray) {
+export function init_program(canvas: HTMLCanvasElement, datafile: ArrayBuffer, pal: Uint8ClampedArray) {
     const player = ctx.player;
     const main_info = ctx.info;
     let c1 = 0;
@@ -1808,7 +1244,7 @@ function init_program(canvas: HTMLCanvasElement, datafile: ArrayBuffer, pal: Uin
     return 0;
 }
 
-function deinit_program() {
+export function deinit_program() {
     dj_stop();
     dj_deinit();
     deinit_controls_listener();

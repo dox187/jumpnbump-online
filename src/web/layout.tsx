@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useRef } from 'preact/hooks';
 import { ComponentChildren } from 'preact';
 
 function ParallaxLogo() {
@@ -34,21 +34,21 @@ function ParallaxLogo() {
     );
 }
 
+/** Where the SOURCE link points; set VITE_SOURCE_URL at build time when you publish your own changes. */
+const SOURCE_URL = import.meta.env.VITE_SOURCE_URL || 'https://github.com/jamsinclair/jumpnbump.js';
+
 export function Layout({
     title,
     children,
     banner,
+    online,
 }: {
     title: string;
     children: ComponentChildren;
     banner?: ComponentChildren;
+    /** Players connected to the multiplayer server, when known. */
+    online?: number;
 }) {
-    const [onlineCount, setOnlineCount] = useState(0);
-
-    useEffect(() => {
-        setOnlineCount(Math.floor(Math.random() * 20));
-    }, []);
-
     return (
         <div className="bg-brainchild-bg w-full h-full min-h-screen flex justify-center">
             <div className="w-full [max-width:690px]  mx-auto mt-2 md:mt-10 p-2 sm:p-4">
@@ -60,9 +60,12 @@ export function Layout({
                         <ParallaxLogo />
                     </header>
                     <div className="bg-brainchild-separator border-t-1 border-b-1 border-black w-full p-1 flex flex-row justify-end items-center text-sm md:text-xs">
-                        <div className="pr-4">
-                            <span className="font-bold">Members:</span> <span>4362.</span>
-                            <span className="pl-1 font-bold">Online:</span> <span>{onlineCount}.</span>
+                        <div className="pr-4 min-h-4">
+                            {online !== undefined && (
+                                <>
+                                    <span className="font-bold">Online:</span> <span>{online}.</span>
+                                </>
+                            )}
                         </div>
                     </div>
                     {banner}
@@ -81,7 +84,15 @@ export function Layout({
                                         href="/"
                                         className="bg-brainchild-primary hover:bg-brainchild-primary-hover border-1 text-black text-md md:text-sm text-center md:text-right font-bold px-3 py-1 md:px-2 md:py-0 flex-grow-0 w-auto md:w-25 cursor-pointer block"
                                     >
-                                        PLAY
+                                        ONLINE
+                                    </a>
+                                </li>
+                                <li>
+                                    <a
+                                        href="/local"
+                                        className="bg-brainchild-primary hover:bg-brainchild-primary-hover border-1 text-black text-md md:text-sm text-center md:text-right font-bold px-3 py-1 md:px-2 md:py-0 flex-grow-0 w-auto md:w-25 cursor-pointer block"
+                                    >
+                                        LOCAL
                                     </a>
                                 </li>
                                 <li>
@@ -102,7 +113,7 @@ export function Layout({
                                 </li>
                                 <li>
                                     <a
-                                        href="https://github.com/jamsinclair/jumpnbump.js"
+                                        href={SOURCE_URL}
                                         className="bg-brainchild-primary hover:bg-brainchild-primary-hover border-1 text-black text-md md:text-sm text-center md:text-right font-bold px-3 py-1 md:px-2 md:py-0 flex-grow-0 w-auto md:w-25 cursor-pointer block"
                                     >
                                         SOURCE
