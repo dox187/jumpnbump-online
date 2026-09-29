@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { lazy } from 'preact-iso';
 import { PageMeta, usePageMeta } from '../hooks/page-meta';
 import { useNet } from '../hooks/net';
 import { useGamepads } from '../hooks/gamepads';
 import { OnlineSettings, useOnlineSettings } from '../hooks/online-settings';
 import { ConfigureController } from '../components/configure-controller';
+import { LevelDialog, Thumbnail } from '../components/level-dialog';
 import { MAPPINGS, getFriendlyGamepadName, getGamepadId, getKnownGamepadDefaults } from '../controls';
 import type { MatchSettings } from '../components/online-match';
-import { Level, RECOMMENDED_LEVELS } from '../constants';
+import { Level } from '../constants';
 import { net, NetState } from '../../net/client';
 import {
     BUNNY_NAMES,
@@ -22,7 +23,7 @@ import {
 } from '../../net/protocol';
 import type { GameInputDevice } from '../../inputs';
 import levels from '../levels.json';
-import { GameAssets, game_assets, level_thumbnail, load_game_assets } from '../pixel/assets';
+import { GameAssets, game_assets, load_game_assets } from '../pixel/assets';
 import {
     Button,
     Checkbox,
@@ -31,7 +32,6 @@ import {
     Icon,
     Panel,
     Paragraph,
-    PixelCanvas,
     Stage,
     Text,
     TextInput,
@@ -59,14 +59,8 @@ const TOAST_MS = 5000;
 /** Per room, the match whose result the player has seen; the room view unmounts while a match runs. */
 const seen_results = new Map<string, string>();
 const ROOMS_PER_PAGE = 8;
-const LEVELS_PER_PAGE = 15;
 /** Where the bunnies hop about while you are in the lobby (right of the room list). */
 const LOBBY_SPOTS = [286, 326, 366, 406].map((x) => ({ x, y: SCENE_Y + 160 }));
-
-const ORDERED_LEVELS: Level[] = [
-    ...levels.filter((l) => RECOMMENDED_LEVELS.includes(l.datFile)),
-    ...levels.filter((l) => !RECOMMENDED_LEVELS.includes(l.datFile)),
-];
 
 function levelFor(datFile: string): Level {
     return levels.find((l) => l.datFile === datFile) ?? { name: datFile, datFile, imageUrl: 'jumpbump.jpg' };
@@ -407,129 +401,6 @@ function Lobby({
                 <Tips />
             </At>
         </>
-    );
-}
-
-function LevelDialog({
-    selected,
-    onSelect,
-    onClose,
-}: {
-    selected: string;
-    onSelect: (level: Level) => void;
-    onClose: () => void;
-}) {
-    const [search, setSearch] = useState('');
-    const filtered = useMemo(() => {
-        const query = search.trim().toLowerCase();
-        return query ? ORDERED_LEVELS.filter((l) => l.name.toLowerCase().includes(query)) : ORDERED_LEVELS;
-    }, [search]);
-    const [page, setPage] = useState(() =>
-        Math.max(0, Math.floor(ORDERED_LEVELS.findIndex((l) => l.datFile === selected) / LEVELS_PER_PAGE))
-    );
-    const pages = Math.max(1, Math.ceil(filtered.length / LEVELS_PER_PAGE));
-    const current = Math.min(page, pages - 1);
-    const shown = filtered.slice(current * LEVELS_PER_PAGE, (current + 1) * LEVELS_PER_PAGE);
-
-    return (
-        <Dialog title="CHOOSE A LEVEL" onClose={onClose} width={440}>
-            <div className="gp-col">
-                <div className="gp-row justify-between">
-                    <TextInput
-                        value={search}
-                        onInput={(value) => {
-                            setSearch(value);
-                            setPage(0);
-                        }}
-                        label="Search levels"
-                        placeholder="Search..."
-                        width={180}
-                        autoFocus
-                    />
-                    <Cycler
-                        label="Level page"
-                        value={current}
-                        options={[...Array(pages).keys()]}
-                        format={(p) => `${p + 1}/${pages}`}
-                        onChange={(p: number) => setPage(p)}
-                        width={40}
-                    />
-                </div>
-                <div
-                    style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(5, 1fr)',
-                        gap: gp(2),
-                        height: gp(201),
-                        alignContent: 'start',
-                    }}
-                >
-                    {shown.map((level) => (
-                        <LevelCard
-                            key={level.datFile}
-                            level={level}
-                            selected={level.datFile === selected}
-                            onClick={() => {
-                                onSelect(level);
-                                onClose();
-                            }}
-                        />
-                    ))}
-                    {shown.length === 0 && <Text text="No level with that name." color="dim" />}
-                </div>
-            </div>
-        </Dialog>
-    );
-}
-
-function Thumbnail({
-    level,
-    width,
-    height,
-    selected = false,
-}: {
-    level: Level;
-    width: number;
-    height: number;
-    selected?: boolean;
-}) {
-    const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
-    useEffect(() => {
-        let active = true;
-        setCanvas(null);
-        level_thumbnail(`/levels/${level.imageUrl}`, width, height).then(
-            (c) => active && setCanvas(c),
-            () => {}
-        );
-        return () => {
-            active = false;
-        };
-    }, [level.imageUrl, width, height]);
-    return (
-        <span
-            className={`gp-thumb inline-flex ${selected ? 'gp-thumb-selected' : ''}`}
-            style={{ width: gp(width + 4), height: gp(height + 4) }}
-        >
-            <PixelCanvas source={canvas} />
-        </span>
-    );
-}
-
-function LevelCard({ level, selected, onClick }: { level: Level; selected: boolean; onClick: () => void }) {
-    const [hot, setHot] = useState(false);
-    return (
-        <button
-            type="button"
-            className="gp-level-card"
-            onClick={onClick}
-            onMouseEnter={() => setHot(true)}
-            onMouseLeave={() => setHot(false)}
-            onFocus={() => setHot(true)}
-            onBlur={() => setHot(false)}
-        >
-            <Thumbnail level={level} width={72} height={46} selected={selected} />
-            <Text text={level.name} color={hot || selected ? 'gold' : 'white'} maxWidth={76} />
-        </button>
     );
 }
 
