@@ -43,6 +43,7 @@ import { TextColor, text_width } from '../pixel/font';
 import { BUNNY_SPOTS, RemoteHop, SCENE_X, SCENE_Y, Scene, SceneBunny, SceneOwnBunny } from '../pixel/scene';
 import { InputTracker, is_text_field, read_input_mask, track_input } from '../pixel/hop';
 import { has_keyboard_focus } from '../pixel/keyboard-nav';
+import { extra_mask } from '../../extra-input';
 import '../pixel/pixel.css';
 
 const OnlineMatch = lazy(() => import('../components/online-match'));
@@ -901,7 +902,7 @@ function useOwnHop(slot: number | null, device: GameInputDevice): SceneOwnBunny 
                 if (!held || has_keyboard_focus() || is_text_field(document.activeElement)) return 0;
                 // Some browsers only offer gamepads to secure (HTTPS) pages
                 const gamepads = navigator.getGamepads?.() ?? [];
-                return read_input_mask(deviceRef.current, held.keys, held.mouse_buttons, gamepads);
+                return read_input_mask(deviceRef.current, held.keys, held.mouse_buttons, gamepads) | extra_mask();
             },
             on_state: (sample) => net.send({ t: 'hop', s: sample }),
             // The level panel covers the right end of the forest

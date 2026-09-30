@@ -39,6 +39,7 @@ import {
 import { INPUT_LEFT, INPUT_RIGHT, INPUT_UP, NO_CHEATS, Sim, SimFx, SimState, clone_state } from '../sim/sim';
 import type { Pob } from '../assets';
 import { CAPS_TOP, TextColor, fit_text, font_ready, init_font, render_text } from '../web/pixel/font';
+import { extra_mask } from '../extra-input';
 
 export type OnlineGameOptions = {
     canvas: HTMLCanvasElement;
@@ -365,7 +366,7 @@ export class OnlineGame {
         if (read_device_input(slot, 0, gamepads)) mask |= INPUT_LEFT;
         if (read_device_input(slot, 1, gamepads)) mask |= INPUT_RIGHT;
         if (read_device_input(slot, 2, gamepads)) mask |= INPUT_UP;
-        return mask;
+        return mask | extra_mask();
     }
 
     private release_keys = () => {

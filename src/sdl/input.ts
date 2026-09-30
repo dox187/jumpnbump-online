@@ -2,6 +2,10 @@ import { MOVEMENT } from '../constants';
 import { key_pressed, mouse_button_pressed } from './interrpt';
 import { tellServerPlayerMoved } from '../network';
 import ctx from '../context';
+import { extra_mask } from '../extra-input';
+import { INPUT_LEFT, INPUT_RIGHT, INPUT_UP } from '../sim/sim';
+
+const EXTRA_BITS = [INPUT_LEFT, INPUT_RIGHT, INPUT_UP];
 
 const client_player_num = -1;
 
@@ -10,6 +14,8 @@ export function read_device_input(
     mappingIndex: number,
     gamepads: readonly (Gamepad | null)[]
 ): boolean {
+    // In the local game the touch buttons and gamepads steer Dott as well
+    if (playerIndex === 0 && extra_mask() & EXTRA_BITS[mappingIndex]) return true;
     const control = ctx.controls[playerIndex];
     if (!control) return false;
 
