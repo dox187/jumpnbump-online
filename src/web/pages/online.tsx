@@ -65,7 +65,7 @@ const COPIED_TOAST_MS = 500;
 
 /** Per room, the match whose result the player has seen; the room view unmounts while a match runs. */
 const seen_results = new Map<string, string>();
-const ROOMS_PER_PAGE = 8;
+const ROOMS_PER_PAGE = 6;
 /** Where the bunnies hop about while you are in the lobby (right of the room list). */
 const LOBBY_SPOTS = [246, 286, 326, 366].map((x) => ({ x: SCENE_X + x, y: SCENE_Y + 160 }));
 /** Left edge of the room's level panel on the stage; the bunnies hop only left of it. */
@@ -382,8 +382,8 @@ function Lobby({
 
     return (
         <>
-            <At x={4} y={74}>
-                <Panel className="gp-col" style={{ width: gp(218), height: gp(146) }}>
+            <At x={4} y={64}>
+                <Panel className="gp-col" style={{ width: gp(218), height: gp(144) }}>
                     <div className="gp-row justify-between">
                         <Text text="ROOMS" color="gold" />
                         <Button label="NEW ROOM" primary onClick={onCreate} />
@@ -450,7 +450,7 @@ function Lobby({
                     )}
                 </Panel>
             </At>
-            <At x={SCENE_X} y={234}>
+            <At x={SCENE_X} y={218}>
                 <Tips />
             </At>
         </>
@@ -829,13 +829,13 @@ function Room({
                 </Panel>
             </At>
 
-            <At x={SCENE_X + 6} y={228}>
+            <At x={SCENE_X + 6} y={198}>
                 <div className="gp-col" style={{ gap: 0 }}>
                     <Text text={status} color="white" />
                     <Text text={hint} color="dim" />
                 </div>
             </At>
-            <At x={SCENE_X + 6} y={266}>
+            <At x={SCENE_X + 6} bottom={4}>
                 <div className="gp-row" style={{ gap: gp(3) }}>
                     <Button label="INVITE" onClick={invite} />
                     <Button label="OPTIONS" onClick={onOptions} />
@@ -1050,6 +1050,7 @@ export default function Online() {
             <Scene
                 assets={assets}
                 bunnies={bunnies}
+                showHeader={!room}
                 own={room ? ownHop : undefined}
                 remote={room ? remoteHops : undefined}
             />
@@ -1110,7 +1111,7 @@ export default function Online() {
             )}
 
             {!room && (
-                <At x={SCENE_X + 8} y={284}>
+                <At x={SCENE_X + 8} bottom={4}>
                     <div className="gp-row" style={{ gap: gp(8) }}>
                         <TextLink href="/local" label="Local game" />
                         <TextLink label="Options" onClick={() => setDialog('options')} />

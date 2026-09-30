@@ -1,14 +1,12 @@
 /**
- * The frame around the game screen. The screen is always 4:3, like the monitors the game was made for, with
- * square pixels: the 400x300 menu fills it, the 400x256 game fills its width with a thin band above and below.
- *
- * On a computer the screen sits on black. On phones and tablets it is set into a woodland pixel-art
- * handheld when held upright, and in landscape when the touch buttons are on; the touch buttons sit beside
- * or below the screen so they never cover it.
+ * The menu and game share the native 400x256 screen, with square pixels and no internal letterboxing.
+ * Phones use the full height in wide landscape and the full width upright. Squarer tablets put their
+ * controls below the screen. The woodland frame and its controls adapt independently of the game pixels.
  */
 import type { ComponentChildren, ComponentType, JSX, Ref } from 'preact';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { touch_input } from '../../extra-input';
+import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../../constants';
 import {
     FULLSCREEN_HELP_EVENT,
     FullscreenHelpProps,
@@ -20,17 +18,14 @@ import { is_mobile_device, touch_enabled, useOnlineSettings } from '../hooks/onl
 import { art_ready, artwork_buttons, draw_handheld, load_handheld_art } from './handheld-art';
 
 /** The game keeps its native framebuffer; all console artwork shares one low-resolution raster. */
-const GAME_SCREEN_W = 400;
-const GAME_SCREEN_H = 300;
 const BODY_SHORT_SIDE = 200;
-const HEADER_H = 48;
 
 export type ButtonId = 'left' | 'right' | 'jump' | 'back' | 'full';
 type Rect = { x: number; y: number; w: number; h: number };
 
 export type ShellLayout = {
     mode: 'plain' | 'landscape' | 'portrait';
-    /** The 4:3 screen in CSS pixels, and where it is on the page. */
+    /** The native-aspect screen in CSS pixels, and where it is on the page. */
     box: Rect;
     /** CSS pixels per body pixel of the handheld frame (handheld modes). */
     body_scale: number;
@@ -72,56 +67,63 @@ const NO_FRAME = {
 
 function compute_layout(touch: boolean): ShellLayout {
     if (typeof window === 'undefined') {
-        return { mode: 'plain', box: { x: 0, y: 0, w: 640, h: 480 }, buttons: {}, ...NO_FRAME };
+        return { mode: 'plain', box: { x: 0, y: 0, w: SCREEN_WIDTH, h: SCREEN_HEIGHT }, buttons: {}, ...NO_FRAME };
     }
     const W = window.innerWidth;
     const H = window.innerHeight;
     const mobile = is_mobile_device();
     const portrait = H > W;
-    if (!mobile || (!portrait && !touch)) {
-        // The largest 4:3 screen that fits with a whole number of device pixels per game pixel, which keeps
+    if (!mobile) {
+        // The largest native-aspect screen with a whole number of device pixels per game pixel keeps
         // pixel art crisp; windows too small for that get a fractional scale
         const dpr = window.devicePixelRatio || 1;
-        const fit = Math.min((W * dpr) / GAME_SCREEN_W, (H * dpr) / GAME_SCREEN_H);
+        const fit = Math.min((W * dpr) / SCREEN_WIDTH, (H * dpr) / SCREEN_HEIGHT);
         const n = fit >= 1 ? Math.floor(fit) : fit;
-        const w = (GAME_SCREEN_W * n) / dpr;
-        const h = (GAME_SCREEN_H * n) / dpr;
+        const w = (SCREEN_WIDTH * n) / dpr;
+        const h = (SCREEN_HEIGHT * n) / dpr;
         return { mode: 'plain', box: { x: round((W - w) / 2), y: round((H - h) / 2), w, h }, buttons: {}, ...NO_FRAME };
     }
 
     const safe = safe_insets();
+    const usable_w = W - safe.left - safe.right;
+    const usable_h = H - safe.top - safe.bottom;
+    // The game size is independent of the artwork raster: rounding it to body pixels leaves visible gaps.
+    // A 16:9 phone has narrow side rails; its direction buttons stack vertically. A tablet needs a deck below.
+    const beside = !portrait && W / H >= 1.75;
+    const deck = touch && !beside ? (usable_w >= 600 ? 96 : 160) : 0;
+    const fit = Math.min(usable_w / SCREEN_WIDTH, Math.max(1, usable_h - deck) / SCREEN_HEIGHT);
+    const w = SCREEN_WIDTH * fit;
+    const h = SCREEN_HEIGHT * fit;
+    const spare = usable_h - h - deck;
+    const header = portrait ? Math.max(0, Math.min(spare, 64)) : 0;
+    const box = {
+        x: safe.left + (usable_w - w) / 2,
+        y: safe.top + (beside || (!portrait && !touch) ? (usable_h - h) / 2 : header),
+        w,
+        h,
+    };
+    if (!portrait && !touch) return { mode: 'plain', box, buttons: {}, ...NO_FRAME };
     // Every console pixel occupies the same whole number of physical display pixels. Draw everything
     // (including labels and held buttons) at 1:1 on this grid, then enlarge the single canvas once.
     const dpr = window.devicePixelRatio || 1;
-    const grid_short_side = portrait && H / W < 1.4 ? 300 : BODY_SHORT_SIDE;
-    const scale = Math.max(1, Math.round((Math.min(W, H) * dpr) / grid_short_side)) / dpr;
+    // Cap the artwork pixel size so utility labels still fit their native sprites on large tablets.
+    const scale =
+        Math.max(1, Math.min(Math.round((Math.min(W, H) * dpr) / BODY_SHORT_SIDE), Math.floor(2 * dpr))) / dpr;
     const view = { w: Math.ceil(W / scale), h: Math.ceil(H / scale) };
     const px = (css: number) => Math.ceil(css / scale);
-    const inset = { top: px(safe.top), right: px(safe.right), bottom: px(safe.bottom), left: px(safe.left) };
-    const usable_w = view.w - inset.left - inset.right;
-    const usable_h = view.h - inset.top - inset.bottom;
-    let screen: Rect;
-    if (portrait) {
-        const controls = touch ? Math.max(124, px(190)) : 12;
-        const sw = Math.max(4, Math.floor(Math.min(usable_w - 16, ((usable_h - HEADER_H - controls) * 4) / 3) / 4) * 4);
-        screen = { x: inset.left + Math.floor((usable_w - sw) / 2), y: inset.top + HEADER_H, w: sw, h: (sw * 3) / 4 };
-    } else {
-        const side = Math.max(56, px(104));
-        const header = 28,
-            footer = 24;
-        const sw = Math.max(
-            4,
-            Math.floor(Math.min(usable_w - side * 2, ((usable_h - header - footer) * 4) / 3) / 4) * 4
-        );
-        screen = { x: inset.left + Math.floor((usable_w - sw) / 2), y: inset.top + header, w: sw, h: (sw * 3) / 4 };
-    }
+    const inset = {
+        top: px(safe.top),
+        right: px(safe.right + view.w * scale - W),
+        bottom: px(safe.bottom + view.h * scale - H),
+        left: px(safe.left),
+    };
     const layout: ShellLayout = {
-        mode: portrait ? 'portrait' : 'landscape',
-        box: { x: screen.x * scale, y: screen.y * scale, w: screen.w * scale, h: screen.h * scale },
+        mode: beside ? 'landscape' : 'portrait',
+        box,
         body_scale: scale,
         view,
         insets: inset,
-        screen,
+        screen: { x: box.x / scale, y: box.y / scale, w: w / scale, h: h / scale },
         buttons: {},
     };
     if (touch) layout.buttons = artwork_buttons(layout);
@@ -151,11 +153,15 @@ export function useShellLayout(): ShellLayout {
         update();
         window.addEventListener('resize', schedule);
         window.addEventListener('orientationchange', rotated);
+        document.addEventListener('fullscreenchange', schedule);
+        window.visualViewport?.addEventListener('resize', schedule);
         return () => {
             clearTimeout(timer);
             clearTimeout(late);
             window.removeEventListener('resize', schedule);
             window.removeEventListener('orientationchange', rotated);
+            document.removeEventListener('fullscreenchange', schedule);
+            window.visualViewport?.removeEventListener('resize', schedule);
         };
     }, [touch]);
     return layout;
@@ -192,6 +198,7 @@ function TouchControls({
         const element = root.current;
         if (!element) return;
         const pointers = new Map<number, ButtonId>();
+        setHeld(new Set());
         const hit = (x: number, y: number): ButtonId | null => {
             const { buttons, body_scale } = layoutRef.current;
             const slack = 8;
@@ -231,6 +238,7 @@ function TouchControls({
                 return;
             }
             pointers.set(event.pointerId, id);
+            element.setPointerCapture(event.pointerId);
             if (id === 'back') press_escape();
             apply();
         };
@@ -281,7 +289,7 @@ function TouchControls({
             window.removeEventListener(FULLSCREEN_HELP_EVENT, release);
             touch_input.left = touch_input.right = touch_input.jump = false;
         };
-    }, []);
+    }, [layout]);
 
     return (
         <>
@@ -325,7 +333,8 @@ function HandheldBody({ layout, held }: { layout: ShellLayout; held: Set<ButtonI
             ref={ref}
             className="gp-body"
             aria-hidden="true"
-            style={{ width: bp(layout.view.w), height: bp(layout.view.h) }}
+            // A transform avoids CSS layout rounding the scaled height to 1/64 px and changing pixel rows.
+            style={{ width: layout.view.w, height: layout.view.h, transform: `scale(${layout.body_scale})` }}
         />
     );
 }
@@ -338,7 +347,7 @@ function block_context_menu(event: Event) {
 }
 
 /**
- * The 4:3 screen showing content of `width` x `height` game pixels, with its frame. `style` gives the CSS
+ * The screen showing content of `width` x `height` game pixels, with its frame. `style` gives the CSS
  * variables of the pixel components for a scale (CSS pixels per game pixel); `stageRef` gets the element
  * the content is laid out in.
  */
@@ -382,7 +391,7 @@ export function Shell({
         element.addEventListener('contextmenu', block_context_menu);
         return () => element.removeEventListener('contextmenu', block_context_menu);
     }, [mounted, layout.mode]);
-    // Square pixels: the content as large as the screen allows, centred (the game leaves a band above and below)
+    // The menu and game use the same square-pixel scale and fill the same screen.
     const content = useMemo(() => {
         const px = Math.min(layout.box.w / width, layout.box.h / height);
         return { px, x: (layout.box.w - width * px) / 2, y: (layout.box.h - height * px) / 2 };

@@ -18,8 +18,8 @@ export const ORDERED_LEVELS: Level[] = [
         .sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base', numeric: true })),
 ];
 
-/** Height of the grid in game pixels: three rows of cards plus the padding for the focus outline. */
-const GRID_HEIGHT = 212;
+/** Leave room for the title and search field inside the native-height game screen. */
+const GRID_HEIGHT = 176;
 
 /** Calls `onNear` once `element` comes near the visible part of the scrolling box; returns a cancel function. */
 type WatchNear = (element: Element, onNear: () => void) => () => void;

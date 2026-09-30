@@ -158,7 +158,7 @@ Podman a proxy container often cannot reach another network's published ports th
    one **ESC** and can watch again with **WATCH**; the host can also end a match from the room.
 
 The online pages are drawn with the game's own graphics: the menu forest, the bitmap font (with added Hungarian
-accents and a few missing symbols) and the bunny sprites, on an integer-scaled pixel grid.
+accents and a few missing symbols) and the bunny sprites, with square pixels and integer scaling on desktops.
 
 Cheats and the 1-4 computer-player keys are disabled online, and each browser controls one bunny.
 
@@ -167,9 +167,16 @@ Cheats and the 1-4 computer-player keys are disabled online, and each browser co
 The mobile version is a **beta**: it works, but it has seen far less testing than the desktop version, especially
 on real devices, so expect rough edges.
 
-- On phones and tablets the screen sits in a pixel-art handheld console carved from wood. Held upright, the touch
-  buttons (left, right, jump, BACK for ESC and FULL for fullscreen) are below the screen; in landscape they are on
-  both sides. They never cover the screen. Computers never show them.
+- The menu and game share a 400x256 screen, preserving the original proportions without internal black bars.
+  It fills the available height on landscape phones (16:9 or wider), and the width in portrait.
+- On phones and tablets a wooden pixel-art frame holds the touch buttons: left, right, jump, BACK for ESC and
+  FULL for fullscreen. They sit beside the screen on wide phones and below it in portrait or on squarer tablets,
+  including 4:3 iPads. Computers never show them.
+- All frame artwork and buttons share one pixel grid. The wood is cropped at its native size, never stretched
+  to fill a panel; the assembled frame is enlarged once with the same square pixels throughout.
+- Touch targets stay at least 48 CSS pixels across. Narrow landscape phones stack the direction buttons;
+  the keys can extend slightly over the screen edges to keep them usable. Notches and home indicators leave
+  safe margins for the controls.
 - The touch buttons can be turned off under **OPTIONS**; a keyboard or a gamepad works alongside them.
 - Music needs an HTTPS address, and some browsers only offer gamepads to HTTPS pages.
 

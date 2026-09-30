@@ -1,6 +1,6 @@
 /**
- * Pixel-art UI kit for the online lobby. Everything is laid out on a 400x300 "game pixel" stage that is
- * scaled by a whole number of device pixels, so frames, text and sprites share one crisp pixel grid.
+ * Pixel-art UI kit for the online lobby. The stage uses the game's native dimensions and square pixels,
+ * with integer device-pixel scaling on desktops and an edge-to-edge fit on mobile devices.
  */
 import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
@@ -8,10 +8,11 @@ import { LINE_HEIGHT, TextColor, fit_text, render_text, text_width, wrap_text } 
 import { useDialogFocus, useKeyboardNav } from './keyboard-nav';
 import { Shell } from './console';
 import { FullscreenHelpProps, is_ios } from '../../fullscreen';
+import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../../constants';
 
-/** The menu fills the 4:3 screen: as wide as the game (and the menu forest), with room above and below. */
-export const STAGE_WIDTH = 400;
-export const STAGE_HEIGHT = 300;
+/** Changing screens never changes the size or aspect ratio of the display. */
+export const STAGE_WIDTH = SCREEN_WIDTH;
+export const STAGE_HEIGHT = SCREEN_HEIGHT;
 
 /** Game pixels as a CSS length. */
 export const gp = (n: number) => `calc(var(--px) * ${n})`;
@@ -123,7 +124,7 @@ export function pixel_variables(scale: number) {
 }
 
 /**
- * The screen with the 400x300 stage, framed by the Shell (plain black on a desktop, a wooden handheld on
+ * The screen with the 400x256 stage, framed by the Shell (plain black on a desktop, a wooden handheld on
  * phones). The arrow keys move the focus between its controls;
  * `navSkip` returns true for keydown events the navigation must leave alone.
  */
@@ -539,7 +540,7 @@ export function Dialog({
                         </button>
                     )}
                 </div>
-                {children}
+                <div className="gp-dialog-content gp-scroll">{children}</div>
             </div>
         </div>
     );

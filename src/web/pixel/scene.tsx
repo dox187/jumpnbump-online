@@ -15,10 +15,7 @@ import { HOP_MAX_X, HOP_SPOTS, HopBunny } from './hop';
 
 /** Where the 400x256 menu screen sits on the stage. */
 export const SCENE_X = 0;
-export const SCENE_Y = 16;
-/** The logo sits in the black header above the forest; lift only that strip to make room for the host. */
-const MENU_HEADER_HEIGHT = 63;
-const LOGO_LIFT = 14;
+export const SCENE_Y = 0;
 
 /**
  * Standing spots of the four bunnies (stage coordinates of the 16x16 player box): on the grass and on the log,
@@ -222,11 +219,14 @@ function update_butterfly(b: Butterfly) {
 export function Scene({
     assets,
     bunnies,
+    showHeader = true,
     own,
     remote,
 }: {
     assets: GameAssets;
     bunnies: SceneBunny[];
+    /** The room uses this space for its name, spectators and level controls. */
+    showHeader?: boolean;
     own?: SceneOwnBunny;
     remote?: () => ReadonlyMap<number, readonly RemoteHop[]>;
 }) {
@@ -237,6 +237,8 @@ export function Scene({
     own_ref.current = own;
     const remote_ref = useRef(remote);
     remote_ref.current = remote;
+    const header_ref = useRef(showHeader);
+    header_ref.current = showHeader;
 
     useEffect(() => {
         const canvas = canvas_ref.current!;
@@ -376,28 +378,8 @@ export function Scene({
         const draw = () => {
             context.fillStyle = '#000';
             context.fillRect(0, 0, STAGE_WIDTH, STAGE_HEIGHT);
-            context.drawImage(
-                assets.menu,
-                0,
-                0,
-                400,
-                MENU_HEADER_HEIGHT,
-                SCENE_X,
-                SCENE_Y - LOGO_LIFT,
-                400,
-                MENU_HEADER_HEIGHT
-            );
-            context.drawImage(
-                assets.menu,
-                0,
-                MENU_HEADER_HEIGHT,
-                400,
-                SCREEN_HEIGHT - MENU_HEADER_HEIGHT,
-                SCENE_X,
-                SCENE_Y + MENU_HEADER_HEIGHT,
-                400,
-                SCREEN_HEIGHT - MENU_HEADER_HEIGHT
-            );
+            context.drawImage(assets.menu, SCENE_X, SCENE_Y);
+            if (!header_ref.current) context.fillRect(0, 0, STAGE_WIDTH, 63);
             context.fillStyle = '#000';
             for (const fly of flies) context.fillRect(fly.x, fly.y, 1, 1);
             const now = performance.now();
@@ -473,12 +455,14 @@ export function Scene({
                 onContextMenu={own ? (e) => e.preventDefault() : undefined}
                 onMouseDown={own ? (e) => e.button !== 0 && e.preventDefault() : undefined}
             />
-            <div
-                className="gp-abs"
-                style={{ left: 0, top: gp(50), width: gp(STAGE_WIDTH), display: 'flex', justifyContent: 'center' }}
-            >
-                <Text text={window.location.hostname} color="dim" maxWidth={STAGE_WIDTH - 16} />
-            </div>
+            {showHeader && (
+                <div
+                    className="gp-abs"
+                    style={{ left: 0, top: gp(47), width: gp(STAGE_WIDTH), display: 'flex', justifyContent: 'center' }}
+                >
+                    <Text text={window.location.hostname} color="dim" maxWidth={STAGE_WIDTH - 16} />
+                </div>
+            )}
         </>
     );
 }
