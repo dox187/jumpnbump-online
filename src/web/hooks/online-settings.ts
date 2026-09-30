@@ -9,7 +9,7 @@ export type OnlineSettings = {
     muteEffects: boolean;
     noGore: boolean;
     noFlies: boolean;
-    /** On-screen touch buttons; null follows the device (on for touch screens). */
+    /** On-screen touch buttons on phones and tablets; null means on. Computers never show them. */
     touch: boolean | null;
 };
 
@@ -50,14 +50,22 @@ function update(patch: Partial<OnlineSettings>) {
     for (const listener of listeners) listener(next);
 }
 
-/** Whether a device with a touch screen and no mouse is in use. */
-export function prefers_touch() {
-    return typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+/**
+ * Whether this is a phone or a tablet rather than a computer (a laptop with a touch screen is a computer).
+ * iPads report themselves as Macs, but Macs have no touch screen.
+ */
+export function is_mobile_device() {
+    if (typeof navigator === 'undefined') return false;
+    const hints = (navigator as Navigator & { userAgentData?: { mobile?: boolean } }).userAgentData;
+    if (hints?.mobile) return true;
+    const agent = navigator.userAgent;
+    if (/Android|iPhone|iPad|iPod|Mobile|Silk|Kindle|BlackBerry|Opera Mini|IEMobile/i.test(agent)) return true;
+    return /Macintosh/.test(agent) && navigator.maxTouchPoints > 1;
 }
 
-/** The effective touch button setting. */
+/** Whether the touch buttons show: only on phones and tablets, and there unless turned off. */
 export function touch_enabled(settings: OnlineSettings) {
-    return settings.touch ?? prefers_touch();
+    return is_mobile_device() && settings.touch !== false;
 }
 
 /** Per-browser settings, remembered in localStorage when it is available. */

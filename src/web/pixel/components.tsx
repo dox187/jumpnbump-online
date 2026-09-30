@@ -1,5 +1,5 @@
 /**
- * Pixel-art UI kit for the online lobby. Everything is laid out on a 480x288 "game pixel" stage that is
+ * Pixel-art UI kit for the online lobby. Everything is laid out on a 480x307 "game pixel" stage that is
  * scaled by a whole number of device pixels, so frames, text and sprites share one crisp pixel grid.
  */
 import type { ComponentChildren, JSX } from 'preact';
@@ -9,7 +9,8 @@ import { useDialogFocus, useKeyboardNav } from './keyboard-nav';
 import { Shell } from './console';
 
 export const STAGE_WIDTH = 480;
-export const STAGE_HEIGHT = 288;
+/** With the game's slightly tall pixels (see console.tsx) 480x307 fills a 4:3 screen, like the match. */
+export const STAGE_HEIGHT = 307;
 
 /** Game pixels as a CSS length. */
 export const gp = (n: number) => `calc(var(--px) * ${n})`;
@@ -121,7 +122,7 @@ export function pixel_variables(scale: number) {
 }
 
 /**
- * The screen with the 480x288 stage, framed by the Shell (plain black on a desktop, a wooden handheld on
+ * The screen with the 480x307 stage, framed by the Shell (plain black on a desktop, a wooden handheld on
  * phones). The arrow keys move the focus between its controls;
  * `navSkip` returns true for keydown events the navigation must leave alone.
  */

@@ -3,7 +3,7 @@ import { lazy } from 'preact-iso';
 import { PageMeta, usePageMeta } from '../hooks/page-meta';
 import { useNet } from '../hooks/net';
 import { useGamepads } from '../hooks/gamepads';
-import { OnlineSettings, touch_enabled, useOnlineSettings } from '../hooks/online-settings';
+import { OnlineSettings, is_mobile_device, touch_enabled, useOnlineSettings } from '../hooks/online-settings';
 import { ConfigureController } from '../components/configure-controller';
 import { LevelDialog, Thumbnail } from '../components/level-dialog';
 import { MAPPINGS, getFriendlyGamepadName, getGamepadId, getKnownGamepadDefaults } from '../controls';
@@ -448,7 +448,7 @@ function Lobby({
                     )}
                 </Panel>
             </At>
-            <At x={SCENE_X} y={222}>
+            <At x={SCENE_X} y={234}>
                 <Tips />
             </At>
         </>
@@ -519,11 +519,13 @@ function OptionsDialog({
                             checked={settings.noFlies}
                             onChange={(noFlies) => updateSettings({ noFlies })}
                         />
-                        <Checkbox
-                            label="Touch buttons"
-                            checked={touch_enabled(settings)}
-                            onChange={(touch) => updateSettings({ touch })}
-                        />
+                        {is_mobile_device() && (
+                            <Checkbox
+                                label="Touch buttons"
+                                checked={touch_enabled(settings)}
+                                onChange={(touch) => updateSettings({ touch })}
+                            />
+                        )}
                     </div>
                     {!musicAvailable && (
                         <Paragraph
@@ -825,13 +827,13 @@ function Room({
                 </Panel>
             </At>
 
-            <At x={SCENE_X + 6} y={216}>
+            <At x={SCENE_X + 6} y={228}>
                 <div className="gp-col" style={{ gap: 0 }}>
                     <Text text={status} color="white" />
                     <Text text={hint} color="dim" />
                 </div>
             </At>
-            <At x={SCENE_X + 6} y={250}>
+            <At x={SCENE_X + 6} y={266}>
                 <div className="gp-row" style={{ gap: gp(3) }}>
                     <Button label="INVITE" onClick={invite} />
                     <Button label="OPTIONS" onClick={onOptions} />
@@ -1106,7 +1108,7 @@ export default function Online() {
             )}
 
             {!room && (
-                <At x={SCENE_X + 8} y={262}>
+                <At x={SCENE_X + 8} y={284}>
                     <div className="gp-row" style={{ gap: gp(8) }}>
                         <TextLink href="/local" label="Local game" />
                         <TextLink label="Options" onClick={() => setDialog('options')} />

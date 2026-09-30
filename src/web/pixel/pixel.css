@@ -3,20 +3,34 @@
 .gp-root {
     position: fixed;
     inset: 0;
-    display: flex;
-    overflow: auto;
+    overflow: hidden;
     background: #000;
     color: #fff;
     user-select: none;
     -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* No text selection, magnifier or long-press menu on phones, except in text fields */
+.gp-root * {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-user-drag: none;
+}
+
+.gp-root input,
+.gp-root textarea {
+    user-select: text;
+    -webkit-user-select: text;
 }
 
 .gp-stage {
-    position: relative;
-    flex-shrink: 0;
-    margin: auto;
-    width: calc(var(--px) * 480);
-    height: calc(var(--px) * 288);
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform-origin: 0 0;
 }
 
 .gp-root canvas {
