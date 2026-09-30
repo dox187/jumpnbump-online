@@ -132,10 +132,10 @@ export function Stage({
     children: ComponentChildren;
     navSkip?: (event: KeyboardEvent) => boolean;
 }) {
-    const stage = useRef<HTMLDivElement>(null);
+    const [stage, setStage] = useState<HTMLDivElement | null>(null);
     useKeyboardNav(stage, navSkip);
     return (
-        <Shell width={STAGE_WIDTH} height={STAGE_HEIGHT} style={pixel_variables} stageRef={stage}>
+        <Shell width={STAGE_WIDTH} height={STAGE_HEIGHT} style={pixel_variables} stageRef={setStage}>
             {children}
         </Shell>
     );

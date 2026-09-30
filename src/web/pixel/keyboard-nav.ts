@@ -249,12 +249,12 @@ function handle_key(stage: HTMLElement, event: KeyboardEvent) {
  * Installs the arrow-key navigation for a stage. `skip` can claim keydown events for something else
  * (the navigation then ignores them entirely); it is read on every key, so it may change between renders.
  */
-export function useKeyboardNav(stage: RefObject<HTMLElement>, skip?: (event: KeyboardEvent) => boolean) {
+export function useKeyboardNav(element: HTMLElement | null, skip?: (event: KeyboardEvent) => boolean) {
     const skip_ref = useRef(skip);
     skip_ref.current = skip;
 
+    // The stage element changes when the frame around it switches layout (rotation, touch buttons on or off)
     useEffect(() => {
-        const element = stage.current;
         if (!element) return;
         stages.add(element);
         const handler = (event: KeyboardEvent) => {
@@ -268,7 +268,7 @@ export function useKeyboardNav(stage: RefObject<HTMLElement>, skip?: (event: Key
             window.removeEventListener('keydown', handler);
             stages.delete(element);
         };
-    }, []);
+    }, [element]);
 }
 
 /**
