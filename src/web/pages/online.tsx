@@ -3,6 +3,8 @@ import { lazy } from 'preact-iso';
 import { PageMeta, usePageMeta } from '../hooks/page-meta';
 import { useNet } from '../hooks/net';
 import { useGamepads } from '../hooks/gamepads';
+import { useLobbyActivity } from '../hooks/lobby-activity';
+import { Ping } from '../components/ping';
 import { OnlineSettings, is_mobile_device, touch_enabled, useOnlineSettings } from '../hooks/online-settings';
 import { ConfigureController } from '../components/configure-controller';
 import { LevelDialog, Thumbnail } from '../components/level-dialog';
@@ -65,7 +67,6 @@ const COPIED_TOAST_MS = 500;
 
 /** Per room, the match whose result the player has seen; the room view unmounts while a match runs. */
 const seen_results = new Map<string, string>();
-const ROOMS_PER_PAGE = 6;
 /** Where the bunnies hop about while you are in the lobby (right of the room list). */
 const LOBBY_SPOTS = [246, 286, 326, 366].map((x) => ({ x: SCENE_X + x, y: SCENE_Y + 160 }));
 /** Left edge of the room's level panel on the stage; the bunnies hop only left of it. */
@@ -346,12 +347,13 @@ const TIPS = [
 ];
 
 /** Messages under the forest, one after the other, like in the original menu. */
-function Tips() {
+function Tips({ paused = false }: { paused?: boolean }) {
     const [index, setIndex] = useState(0);
     useEffect(() => {
+        if (paused) return;
         const timer = setInterval(() => setIndex((i) => (i + 1) % TIPS.length), 6000);
         return () => clearInterval(timer);
-    }, []);
+    }, [paused]);
     return (
         <div key={index} className="gp-fade" style={{ display: 'flex', justifyContent: 'center', width: gp(400) }}>
             <Text text={TIPS[index]} color="white" />
@@ -363,17 +365,28 @@ function Lobby({
     state,
     onCreate,
     onJoinLocked,
+    paused = false,
 }: {
     state: NetState;
     onCreate: () => void;
     onJoinLocked: (room: RoomSummary) => void;
+    paused?: boolean;
 }) {
-    const [page, setPage] = useState(0);
-    const paged = state.rooms.length > ROOMS_PER_PAGE;
-    const per_page = paged ? ROOMS_PER_PAGE - 1 : ROOMS_PER_PAGE;
-    const pages = Math.max(1, Math.ceil(state.rooms.length / per_page));
-    const current = Math.min(page, pages - 1);
-    const shown = state.rooms.slice(current * per_page, (current + 1) * per_page);
+    const [searching, setSearching] = useState(false);
+    const [query, setQuery] = useState('');
+    const list = useRef<HTMLDivElement>(null);
+    const searchButton = useRef<HTMLButtonElement>(null);
+    const term = query.trim().normalize('NFC').toLocaleLowerCase();
+    const shown = state.rooms.filter((room) => room.name.normalize('NFC').toLocaleLowerCase().includes(term));
+    useEffect(() => {
+        if (list.current) list.current.scrollTop = 0;
+    }, [query]);
+
+    const closeSearch = () => {
+        setSearching(false);
+        setQuery('');
+        searchButton.current?.focus();
+    };
 
     const join = (room: RoomSummary) => {
         if (room.locked) onJoinLocked(room);
@@ -383,17 +396,66 @@ function Lobby({
     return (
         <>
             <At x={4} y={64}>
-                <Panel className="gp-col" style={{ width: gp(218), height: gp(144) }}>
+                <Panel className="gp-col gp-room-panel" style={{ width: gp(218), height: gp(144) }}>
                     <div className="gp-row justify-between">
-                        <Text text="ROOMS" color="gold" />
+                        <div className="gp-row">
+                            <Text text="ROOMS" color="gold" />
+                            <button
+                                ref={searchButton}
+                                type="button"
+                                className="gp-search-button"
+                                aria-label="Search rooms"
+                                aria-expanded={searching}
+                                aria-controls="room-search"
+                                title="Search rooms"
+                                onClick={() => (searching ? closeSearch() : setSearching(true))}
+                            >
+                                <Icon name="search" />
+                            </button>
+                        </div>
                         <Button label="NEW ROOM" primary onClick={onCreate} />
                     </div>
-                    <div className="gp-col" style={{ gap: 0, flexGrow: 1 }}>
+                    {searching && (
+                        <div
+                            id="room-search"
+                            role="search"
+                            className="gp-row gp-room-search"
+                            onKeyDown={(event) => {
+                                if (event.key !== 'Escape') return;
+                                event.preventDefault();
+                                event.stopPropagation();
+                                closeSearch();
+                            }}
+                        >
+                            <TextInput
+                                value={query}
+                                onInput={setQuery}
+                                label="Filter rooms by name"
+                                placeholder="Room name..."
+                                maxLength={ROOM_NAME_MAX_LENGTH}
+                                width={176}
+                                autoFocus
+                            />
+                            <button
+                                type="button"
+                                className="gp-search-button"
+                                aria-label="Clear room search"
+                                onClick={() => setQuery('')}
+                            >
+                                <Icon name="close" />
+                            </button>
+                        </div>
+                    )}
+                    <div ref={list} className="gp-room-list gp-scroll" role="region" aria-label="Rooms" tabIndex={0}>
                         {shown.length === 0 && (
                             <div className="gp-col" style={{ paddingTop: gp(16), alignItems: 'center' }}>
-                                <Text text="No rooms yet." color="white" />
+                                <Text text={term ? 'No matching rooms.' : 'No rooms yet.'} color="white" />
                                 <Paragraph
-                                    text="Make a new one and invite your friends!"
+                                    text={
+                                        term
+                                            ? 'Try another name or clear the search.'
+                                            : 'Make a new one and invite your friends!'
+                                    }
                                     width={170}
                                     color="dim"
                                     center
@@ -417,8 +479,8 @@ function Lobby({
                                     <span style={{ width: gp(7), display: 'inline-flex' }}>
                                         {room.locked && <Icon name="lock" />}
                                     </span>
-                                    <span style={{ width: gp(136), display: 'inline-flex' }}>
-                                        <Text text={room.name} color={full ? 'dim' : 'white'} maxWidth={134} />
+                                    <span className="gp-room-name">
+                                        <Text text={room.name} color={full ? 'dim' : 'white'} maxWidth={128} />
                                     </span>
                                     <span style={{ width: gp(30), display: 'inline-flex', justifyContent: 'flex-end' }}>
                                         {room.status !== 'lobby' ? (
@@ -436,22 +498,10 @@ function Lobby({
                             );
                         })}
                     </div>
-                    {paged && (
-                        <div className="gp-row justify-center">
-                            <Cycler
-                                label="Room list page"
-                                value={current}
-                                options={[...Array(pages).keys()]}
-                                format={(p) => `${p + 1}/${pages}`}
-                                onChange={(p: number) => setPage(p)}
-                                width={30}
-                            />
-                        </div>
-                    )}
                 </Panel>
             </At>
             <At x={SCENE_X} y={218}>
-                <Tips />
+                <Tips paused={paused} />
             </At>
         </>
     );
@@ -929,6 +979,8 @@ function useOwnHop(slot: number | null, device: GameInputDevice): SceneOwnBunny 
 export default function Online() {
     usePageMeta(onlinePageMeta);
     const state = useNet();
+    const inactive = state.status === 'inactive';
+    useLobbyActivity(!inactive && !state.room && !state.match);
     const [settings, updateSettings, loaded] = useOnlineSettings();
     const gamepads = useGamepads();
     // Every gamepad works without setup, except the one picked as the control: that one keeps its own buttons
@@ -1027,6 +1079,7 @@ export default function Online() {
                 isHost={state.room?.hostId === state.me.id}
                 spectating={state.spectating}
                 settings={matchSettings}
+                ping={state.ping}
             />
         );
     }
@@ -1047,102 +1100,131 @@ export default function Online() {
 
     return (
         <Stage navSkip={navSkip}>
-            <Scene
-                assets={assets}
-                bunnies={bunnies}
-                showHeader={!room}
-                own={room ? ownHop : undefined}
-                remote={room ? remoteHops : undefined}
-            />
+            <div
+                className={`gp-online-content${inactive ? ' gp-inactive' : ''}`}
+                inert={inactive || undefined}
+                aria-hidden={inactive || undefined}
+            >
+                <Scene
+                    assets={assets}
+                    bunnies={bunnies}
+                    showHeader={!room}
+                    own={room ? ownHop : undefined}
+                    remote={room ? remoteHops : undefined}
+                    paused={inactive}
+                />
 
-            {!room && online && (
-                <>
-                    <At x={4} y={4}>
-                        <div className="gp-row" style={{ gap: gp(3) }}>
-                            <Text text="You:" color="dim" shadow />
-                            <Button
-                                label={state.me?.name ?? settings.name}
-                                onClick={() => setDialog('name')}
-                                title="Change your name"
+                {!room && online && (
+                    <>
+                        <At x={4} y={4}>
+                            <div className="gp-row" style={{ gap: gp(3) }}>
+                                <Text text="You:" color="dim" shadow />
+                                <Button
+                                    label={state.me?.name ?? settings.name}
+                                    onClick={() => setDialog('name')}
+                                    title="Change your name"
+                                />
+                            </div>
+                        </At>
+                        <At right={4} y={6}>
+                            <Text text={`Online: ${state.online}`} color="green" shadow />
+                        </At>
+                    </>
+                )}
+
+                {loaded && !settings.name && (
+                    <NameDialog initial="" title="WELCOME, BUNNY!" onSubmit={(name) => updateSettings({ name })} />
+                )}
+                {loaded && settings.name && state.name_taken && (
+                    <NameDialog
+                        initial={state.name_taken}
+                        title="NAME TAKEN"
+                        note={`Somebody online is already called ${state.name_taken}. Please pick another name.`}
+                        onSubmit={(name) => {
+                            updateSettings({ name });
+                            net.connect(name);
+                        }}
+                    />
+                )}
+
+                {loaded && settings.name && !online && !inactive && (
+                    <At x={100} y={110}>
+                        <Panel className="gp-col" style={{ width: gp(200), alignItems: 'center' }}>
+                            <Text
+                                text={state.status === 'offline' ? 'SERVER NOT REACHABLE' : 'CONNECTING...'}
+                                color="gold"
                             />
+                            <Text
+                                text={state.status === 'offline' ? 'Trying again...' : 'Hold on to your ears.'}
+                                color="dim"
+                            />
+                        </Panel>
+                    </At>
+                )}
+
+                {(online || inactive) && !room && (
+                    <Lobby
+                        state={state}
+                        onCreate={() => setDialog('create')}
+                        onJoinLocked={setLockedRoom}
+                        paused={inactive}
+                    />
+                )}
+                {online && room && (
+                    <Room state={state} room={room} onOptions={() => setDialog('options')} onToast={showToast} />
+                )}
+
+                {!room && (
+                    <At x={SCENE_X + 8} bottom={4}>
+                        <div className="gp-row" style={{ gap: gp(8) }}>
+                            <TextLink href="/local" label="Local game" />
+                            <TextLink label="Options" onClick={() => setDialog('options')} />
+                            <TextLink label="About" onClick={() => setDialog('about')} />
+                            <TextLink href={SOURCE_URL} label="Source" />
                         </div>
                     </At>
-                    <At right={4} y={6}>
-                        <Text text={`Online: ${state.online}`} color="green" shadow />
-                    </At>
-                </>
-            )}
+                )}
 
-            {loaded && !settings.name && (
-                <NameDialog initial="" title="WELCOME, BUNNY!" onSubmit={(name) => updateSettings({ name })} />
-            )}
-            {loaded && settings.name && state.name_taken && (
-                <NameDialog
-                    initial={state.name_taken}
-                    title="NAME TAKEN"
-                    note={`Somebody online is already called ${state.name_taken}. Please pick another name.`}
-                    onSubmit={(name) => {
-                        updateSettings({ name });
-                        net.connect(name);
-                    }}
-                />
-            )}
+                {dialog === 'name' && (
+                    <NameDialog
+                        initial={state.me?.name ?? settings.name}
+                        title="YOUR NAME"
+                        onClose={() => setDialog(null)}
+                        onSubmit={(name) => {
+                            updateSettings({ name });
+                            net.send({ t: 'name', name });
+                            setDialog(null);
+                        }}
+                    />
+                )}
+                {dialog === 'create' && (
+                    <CreateRoomDialog myName={state.me?.name ?? settings.name} onClose={() => setDialog(null)} />
+                )}
+                {dialog === 'options' && (
+                    <OptionsDialog
+                        settings={settings}
+                        updateSettings={updateSettings}
+                        onClose={() => setDialog(null)}
+                    />
+                )}
+                {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
+                {lockedRoom && !room && <PasswordDialog room={lockedRoom} onClose={() => setLockedRoom(null)} />}
 
-            {loaded && settings.name && !online && (
-                <At x={100} y={110}>
-                    <Panel className="gp-col" style={{ width: gp(200), alignItems: 'center' }}>
-                        <Text
-                            text={state.status === 'offline' ? 'SERVER NOT REACHABLE' : 'CONNECTING...'}
-                            color="gold"
+                <ToastView toast={toast} onDismiss={() => net.clear_error()} />
+            </div>
+            {inactive && (
+                <Dialog title="DISCONNECTED" width={238}>
+                    <div className="gp-col" style={{ alignItems: 'center', gap: gp(8) }}>
+                        <Paragraph
+                            text="Disconnected after 5 minutes of inactivity outside a room."
+                            width={220}
+                            center
                         />
-                        <Text
-                            text={state.status === 'offline' ? 'Trying again...' : 'Hold on to your ears.'}
-                            color="dim"
-                        />
-                    </Panel>
-                </At>
-            )}
-
-            {online && !room && (
-                <Lobby state={state} onCreate={() => setDialog('create')} onJoinLocked={setLockedRoom} />
-            )}
-            {online && room && (
-                <Room state={state} room={room} onOptions={() => setDialog('options')} onToast={showToast} />
-            )}
-
-            {!room && (
-                <At x={SCENE_X + 8} bottom={4}>
-                    <div className="gp-row" style={{ gap: gp(8) }}>
-                        <TextLink href="/local" label="Local game" />
-                        <TextLink label="Options" onClick={() => setDialog('options')} />
-                        <TextLink label="About" onClick={() => setDialog('about')} />
-                        <TextLink href={SOURCE_URL} label="Source" />
+                        <Button label="RECONNECT" primary onClick={() => net.connect(settings.name)} />
                     </div>
-                </At>
+                </Dialog>
             )}
-
-            {dialog === 'name' && (
-                <NameDialog
-                    initial={state.me?.name ?? settings.name}
-                    title="YOUR NAME"
-                    onClose={() => setDialog(null)}
-                    onSubmit={(name) => {
-                        updateSettings({ name });
-                        net.send({ t: 'name', name });
-                        setDialog(null);
-                    }}
-                />
-            )}
-            {dialog === 'create' && (
-                <CreateRoomDialog myName={state.me?.name ?? settings.name} onClose={() => setDialog(null)} />
-            )}
-            {dialog === 'options' && (
-                <OptionsDialog settings={settings} updateSettings={updateSettings} onClose={() => setDialog(null)} />
-            )}
-            {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
-            {lockedRoom && !room && <PasswordDialog room={lockedRoom} onClose={() => setLockedRoom(null)} />}
-
-            <ToastView toast={toast} onDismiss={() => net.clear_error()} />
+            <Ping value={state.ping} />
         </Stage>
     );
 }

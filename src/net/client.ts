@@ -5,6 +5,7 @@
 import {
     ClientMessage,
     HopSample,
+    IDLE_CLOSE_CODE,
     MatchInfo,
     PROTOCOL_VERSION,
     RoomDetail,
@@ -12,7 +13,7 @@ import {
     ServerMessage,
 } from './protocol';
 
-export type NetStatus = 'idle' | 'connecting' | 'online' | 'offline';
+export type NetStatus = 'idle' | 'connecting' | 'online' | 'offline' | 'inactive';
 
 export type NetState = {
     status: NetStatus;
@@ -23,6 +24,8 @@ export type NetState = {
     /** The latest error from the server, with a counter so the UI can tell repeated errors apart. */
     error: { message: string; seq: number; at: number } | null;
     rtt: number;
+    /** Latest measured round trip, for display; null until the first reply or while disconnected. */
+    ping: number | null;
     /** The match we take part in or watch, from 'load' / 'watch' until we leave its score screen. */
     match: MatchInfo | null;
     match_over: boolean;
@@ -39,6 +42,7 @@ type MatchHandler = (message: ServerMessage) => void;
 const PING_INTERVAL_MS = 2000;
 const MAX_RETRY_MS = 10000;
 const HOP_SAMPLES_KEPT = 8;
+const ACTIVITY_INTERVAL_MS = 10000;
 
 /** Identifies this browser tab across reconnects (and reloads), so the server lets it keep its name. */
 function tab_token() {
@@ -65,6 +69,7 @@ class NetClient {
         room: null,
         error: null,
         rtt: 100,
+        ping: null,
         match: null,
         match_over: false,
         spectating: false,
@@ -86,6 +91,8 @@ class NetClient {
     private error_seq = 0;
     private had_room = false;
     private token = '';
+    private activity_sent = -Infinity;
+    private activity_timer: ReturnType<typeof setTimeout> | null = null;
 
     subscribe(listener: () => void) {
         this.listeners.add(listener);
@@ -97,6 +104,7 @@ class NetClient {
     connect(name: string) {
         this.name = name;
         this.wanted = true;
+        if (this.state.status === 'inactive') this.update({ status: 'connecting', error: null });
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             // Still waiting for a free name, or renaming once we are in
             if (this.state.status === 'online') this.send({ t: 'name', name });
@@ -114,6 +122,31 @@ class NetClient {
 
     send(message: ClientMessage) {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(message));
+    }
+
+    /** Called by real browsing input, never by animation frames, room-list updates or heartbeat replies. */
+    activity() {
+        if (!this.wanted || this.state.room || this.ws?.readyState !== WebSocket.OPEN) return;
+        const remaining = ACTIVITY_INTERVAL_MS - (performance.now() - this.activity_sent);
+        if (remaining > 0) {
+            // Send the last interaction in a burst too, so the timeout is not measured from its first event.
+            if (!this.activity_timer) {
+                this.activity_timer = setTimeout(() => {
+                    this.activity_timer = null;
+                    this.activity();
+                }, remaining);
+            }
+            return;
+        }
+        this.activity_sent = performance.now();
+        this.send({ t: 'activity' });
+    }
+
+    private stop_timers() {
+        if (this.retry_timer) clearTimeout(this.retry_timer);
+        if (this.ping_timer) clearInterval(this.ping_timer);
+        if (this.activity_timer) clearTimeout(this.activity_timer);
+        this.retry_timer = this.ping_timer = this.activity_timer = null;
     }
 
     /** The running game registers here; messages that arrived before it did are replayed. */
@@ -140,14 +173,17 @@ class NetClient {
         const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
         const ws = new WebSocket(`${protocol}://${location.host}/ws`);
         this.ws = ws;
-        this.update({ status: this.state.status === 'offline' ? 'offline' : 'connecting' });
+        this.activity_sent = -Infinity;
+        this.update({ status: this.state.status === 'offline' ? 'offline' : 'connecting', ping: null });
 
         ws.onopen = () => {
-            this.retry_ms = 1000;
+            if (this.ws !== ws) return;
             ws.send(JSON.stringify(this.hello()));
+            this.send({ t: 'ping', c: performance.now() });
             this.ping_timer = setInterval(() => this.send({ t: 'ping', c: performance.now() }), PING_INTERVAL_MS);
         };
         ws.onmessage = (event) => {
+            if (this.ws !== ws) return;
             let message: ServerMessage;
             try {
                 message = JSON.parse(event.data);
@@ -156,16 +192,18 @@ class NetClient {
             }
             this.handle(message);
         };
-        ws.onclose = () => {
+        ws.onclose = (event) => {
             if (this.ws !== ws) return;
             this.ws = null;
-            if (this.ping_timer) clearInterval(this.ping_timer);
-            this.ping_timer = null;
+            this.stop_timers();
+            const inactive = event.code === IDLE_CLOSE_CODE || this.state.status === 'inactive';
+            if (inactive) this.wanted = false;
             const lost_room = this.state.room !== null || this.state.match !== null;
             this.match_buffer = [];
             this.hops.clear();
             this.update({
-                status: this.wanted ? 'offline' : 'idle',
+                status: inactive ? 'inactive' : this.wanted ? 'offline' : 'idle',
+                ping: null,
                 room: null,
                 match: null,
                 match_over: false,
@@ -181,7 +219,13 @@ class NetClient {
 
     private handle(message: ServerMessage) {
         switch (message.t) {
+            case 'idle':
+                this.wanted = false;
+                this.stop_timers();
+                this.update({ status: 'inactive', ping: null });
+                return;
             case 'welcome':
+                this.retry_ms = 1000;
                 this.update({
                     status: 'online',
                     me: { id: message.id, name: message.name },
@@ -232,7 +276,9 @@ class NetClient {
                 this.error(message.message);
                 return;
             case 'pong':
-                this.update({ rtt: this.state.rtt * 0.7 + (performance.now() - message.c) * 0.3 });
+                if (!Number.isFinite(message.c)) return;
+                const elapsed = Math.max(0, performance.now() - message.c);
+                this.update({ rtt: this.state.rtt * 0.7 + elapsed * 0.3, ping: Math.round(elapsed) });
                 return;
             case 'load':
                 this.match_handler = null;

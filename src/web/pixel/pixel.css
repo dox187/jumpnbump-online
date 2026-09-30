@@ -43,6 +43,71 @@
     position: absolute;
 }
 
+.gp-online-content {
+    position: absolute;
+    inset: 0;
+}
+
+.gp-inactive {
+    filter: grayscale(1) brightness(0.65);
+    pointer-events: none;
+}
+
+.gp-inactive * {
+    animation-play-state: paused !important;
+}
+
+.gp-ping {
+    position: absolute;
+    right: calc(var(--px) * 3);
+    bottom: calc(var(--px) * 3);
+    z-index: 70;
+    padding: var(--px);
+    background: rgba(0, 0, 0, 0.7);
+    pointer-events: none;
+}
+
+.gp-room-panel > .gp-row {
+    flex-shrink: 0;
+}
+
+.gp-search-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: calc(var(--px) * 18);
+    height: calc(var(--px) * 18);
+    flex-shrink: 0;
+    padding: 0;
+    cursor: pointer;
+    background: none;
+    border: 0;
+}
+
+.gp-search-button:hover,
+.gp-search-button[aria-expanded='true'] {
+    background: rgba(255, 214, 72, 0.14);
+}
+
+.gp-room-list {
+    min-height: 0;
+    flex: 1;
+    scrollbar-gutter: stable;
+    touch-action: pan-y;
+}
+
+.gp-room-list .gp-list-item {
+    min-height: calc(var(--px) * 18);
+    scroll-margin: var(--px);
+}
+
+.gp-room-name {
+    display: inline-flex;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
 .gp-text {
     position: relative;
     display: inline-flex;

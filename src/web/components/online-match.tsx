@@ -6,6 +6,7 @@ import type { Countdown, OnlineGame, OnlineGamePhase } from '../../online/online
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../../constants';
 import { Button, FullscreenHelp, Panel, Text, gp, pixel_variables } from '../pixel/components';
 import { Shell } from '../pixel/console';
+import { Ping } from './ping';
 import '../pixel/pixel.css';
 
 export type MatchSettings = {
@@ -24,6 +25,7 @@ export default function OnlineMatch({
     isHost,
     spectating,
     settings,
+    ping,
 }: {
     match: MatchInfo;
     myId: string;
@@ -31,6 +33,7 @@ export default function OnlineMatch({
     /** Only watching: no bunny, ESC goes straight back to the room. */
     spectating: boolean;
     settings: MatchSettings;
+    ping: number | null;
 }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const gameRef = useRef<OnlineGame | null>(null);
@@ -41,7 +44,6 @@ export default function OnlineMatch({
     const [phase, setPhase] = useState<OnlineGamePhase>('loading');
     const [notice, setNotice] = useState<string | null>(null);
     const [failed, setFailed] = useState<string | null>(null);
-    const [ping, setPing] = useState<number | null>(null);
     const [stalled, setStalled] = useState(false);
     const [countdown, setCountdown] = useState<Countdown>(null);
 
@@ -121,7 +123,6 @@ export default function OnlineMatch({
             });
 
         const statsTimer = setInterval(() => {
-            setPing(Math.round(net.state.rtt));
             setStalled(gameRef.current?.stats()?.stalled ?? false);
         }, 500);
 
@@ -264,10 +265,11 @@ export default function OnlineMatch({
             )}
 
             {phase === 'scores' && (
-                <div className="gp-abs" style={{ right: gp(6), bottom: gp(4) }}>
+                <div className="gp-abs" style={{ right: gp(6), bottom: gp(12) }}>
                     <Button label="CONTINUE" primary onClick={() => gameRef.current?.dismiss_scores()} />
                 </div>
             )}
+            <Ping value={ping} />
         </Shell>
     );
 }

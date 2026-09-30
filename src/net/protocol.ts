@@ -9,7 +9,11 @@
  */
 import type { SimState } from '../sim/sim';
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
+
+/** Inactive connections outside rooms are released until the user chooses to reconnect. */
+export const LOBBY_IDLE_MS = 5 * 60 * 1000;
+export const IDLE_CLOSE_CODE = 4001;
 
 export const FRAME_MS = 1000 / 60;
 /** Bunnies per match. */
@@ -100,6 +104,8 @@ export type HopSample = [x: number, y: number, image: number];
 export type LeaveEvent = [f: number, slot: number];
 
 export type ClientMessage =
+    /** Actual UI interaction outside a room; automatic pings do not keep an idle client connected. */
+    | { t: 'activity' }
     /** `token` identifies the browser tab, so a reconnect can take over its own name. */
     | { t: 'hello'; v: number; name: string; token: string }
     | { t: 'name'; name: string }
@@ -128,6 +134,7 @@ export type ClientMessage =
     | { t: 'ping'; c: number };
 
 export type ServerMessage =
+    | { t: 'idle' }
     | { t: 'welcome'; id: string; name: string; online: number }
     /** Somebody who is online uses that name already; choose another one. */
     | { t: 'nameTaken'; name: string }

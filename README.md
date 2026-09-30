@@ -162,6 +162,15 @@ accents and a few missing symbols) and the bunny sprites, with square pixels and
 
 Cheats and the 1-4 computer-player keys are disabled online, and each browser controls one bunny.
 
+Scroll the room list to browse all rooms. The magnifying glass beside **ROOMS** opens a name filter; searching
+ignores letter case. A small ping indicator stays in the bottom-right corner in the menus and during matches:
+white up to 150 ms, yellow above 150 ms, and red above 300 ms.
+
+Outside a room, five minutes without browsing activity disconnects the client and pauses the animated background.
+The screen turns grey until you press **RECONNECT**. Scrolling, searching, pointer and keyboard input keep the
+connection active; automatic ping replies and room-list updates do not. Players and spectators in a room are
+exempt, and leaving a room starts a fresh five-minute window.
+
 ## Phones and tablets
 
 Play in portrait or landscape with touch controls, in both online and local games. The menu and game keep their

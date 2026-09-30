@@ -222,6 +222,7 @@ export function Scene({
     showHeader = true,
     own,
     remote,
+    paused = false,
 }: {
     assets: GameAssets;
     bunnies: SceneBunny[];
@@ -229,6 +230,7 @@ export function Scene({
     showHeader?: boolean;
     own?: SceneOwnBunny;
     remote?: () => ReadonlyMap<number, readonly RemoteHop[]>;
+    paused?: boolean;
 }) {
     const canvas_ref = useRef<HTMLCanvasElement>(null);
     const wanted = useRef(bunnies);
@@ -241,6 +243,8 @@ export function Scene({
     header_ref.current = showHeader;
 
     useEffect(() => {
+        // Keep the last canvas frame and stop requesting frames until the user reconnects.
+        if (paused) return;
         const canvas = canvas_ref.current!;
         const context = canvas.getContext('2d')!;
         const shadows = assets.rabbit.map(ghost_of);
@@ -440,7 +444,7 @@ export function Scene({
         draw();
         request = requestAnimationFrame(loop);
         return () => cancelAnimationFrame(request);
-    }, [assets]);
+    }, [assets, paused]);
 
     return (
         <>

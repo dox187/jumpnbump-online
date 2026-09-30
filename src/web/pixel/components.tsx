@@ -512,6 +512,7 @@ export function Dialog({
     useEffect(() => {
         if (!onClose) return;
         const handler = (e: KeyboardEvent) => {
+            if (panel.current?.closest('[inert]')) return;
             if (e.key === 'Escape') {
                 e.preventDefault();
                 onClose();
@@ -590,6 +591,10 @@ export function FullscreenHelp({ issue, onClose }: FullscreenHelpProps) {
 
 /** Small pixel icons; each character is a colour key, '.' is transparent. */
 const ICONS: Record<string, { rows: string[]; colors: Record<string, string> }> = {
+    search: {
+        rows: ['.WWW.....', 'W...W....', 'W...W....', 'W...W....', '.WWW.W...', '.....WW..', '......WW.', '.......WW'],
+        colors: { W: '#f4e6c8' },
+    },
     lock: {
         rows: ['..ooo..', '.oSSSo.', '.oS.So.', 'ooooooo', 'oGGGGGo', 'oGGoGGo', 'oGGoGGo', 'ooooooo'],
         colors: { o: '#1a1000', S: '#c8c8c8', G: '#ffd648' },

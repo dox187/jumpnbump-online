@@ -7,6 +7,8 @@ import {
     DEFAULT_END_SCORE,
     DEFAULT_LEVEL,
     END_SCORE_OPTIONS,
+    IDLE_CLOSE_CODE,
+    LOBBY_IDLE_MS,
     MAX_ROOM_MEMBERS,
     MAX_ROOM_PLAYERS,
     MIN_MATCH_PLAYERS,
@@ -30,6 +32,7 @@ const scrypt_async = promisify(scrypt) as (password: string, salt: Buffer, keyle
 const MAX_ROOMS = 100;
 const MAX_CLIENTS = 500;
 const MAX_CLIENTS_PER_IP = 16;
+const IDLE_CHECK_INTERVAL_MS = 5000;
 const FAILED_JOIN_WINDOW_MS = 60000;
 const MAX_FAILED_JOINS = 5;
 const MESSAGE_RATE_WINDOW_MS = 1000;
@@ -54,6 +57,7 @@ type Client = {
     message_window_start: number;
     message_count: number;
     busy: boolean;
+    last_activity: number;
 };
 
 type Member = {
@@ -111,6 +115,7 @@ export class Lobby {
 
     constructor(levels_dir: string) {
         this.levels_dir = levels_dir;
+        setInterval(() => this.close_idle_clients(performance.now()), IDLE_CHECK_INTERVAL_MS).unref();
         setInterval(() => {
             const now = performance.now();
             for (const [ip, failures] of this.failed_joins) {
@@ -149,6 +154,7 @@ export class Lobby {
             message_window_start: performance.now(),
             message_count: 0,
             busy: false,
+            last_activity: performance.now(),
         };
         this.connections.add(ws);
         this.clients.set(client.id, client);
@@ -186,6 +192,12 @@ export class Lobby {
     }
 
     private async handle(client: Client, message: ClientMessage, now: number) {
+        if (client.ws.readyState !== client.ws.OPEN) return;
+        if (message.t === 'activity') {
+            client.last_activity = now;
+            return;
+        }
+        if (['hello', 'name', 'create', 'join', 'leave'].includes(message.t)) client.last_activity = now;
         if (!client.greeted) {
             if (message.t !== 'hello') return;
             if (message.v !== PROTOCOL_VERSION) {
@@ -458,6 +470,8 @@ export class Lobby {
         const room = client.room;
         if (!room) return;
         client.room = null;
+        // Time spent in a room never consumes the five minutes available for browsing afterwards.
+        client.last_activity = performance.now();
         room.members.delete(client.id);
         room.match?.remove(client.id, performance.now());
         room.match?.remove_spectator(client.id);
@@ -624,6 +638,15 @@ export class Lobby {
         this.leave_room(client);
         this.clients.delete(client.id);
         client.ws.close(4000, reason);
+    }
+
+    private close_idle_clients(now: number) {
+        for (const client of this.clients.values()) {
+            if (client.room || client.ws.readyState !== client.ws.OPEN) continue;
+            if (now - client.last_activity < LOBBY_IDLE_MS) continue;
+            this.send(client, { t: 'idle' });
+            client.ws.close(IDLE_CLOSE_CODE, 'Inactive outside a room for five minutes');
+        }
     }
 
     private online_count() {
