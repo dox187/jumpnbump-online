@@ -4,7 +4,7 @@
 
 A self-hostable, browser-based **online multiplayer** version of _Jump 'n Bump_, the 1998 bunny game in which you
 score by jumping on the other bunnies' heads. Players only need a browser: create a room, send your friends the
-invite link, pick one of 250+ levels and play, each on your own computer.
+invite link, pick one of 250+ levels and play, each on your own device.
 
 | The lobby                                         | A room                                         |
 | ------------------------------------------------- | ---------------------------------------------- |
@@ -33,9 +33,9 @@ moved into a shared module, and a test comparing the old and new code on every l
 Features of the online mode:
 
 - A lobby with rooms. Rooms can be protected with a password, and each room has an invite link (`/?room=<id>`).
-- Up to four players and any spectators (16 people in all) per room. Everyone plays on their own keyboard or
-  gamepad and picks their bunny (Dott, Jiffy, Fizz or Mijji); in the room the players hop around the forest with
-  their bunnies as in the original menu. Names are unique among the people online.
+- Up to four players and any spectators (16 people in all) per room. Everyone plays with their own keyboard,
+  gamepad or touch controls and picks their bunny (Dott, Jiffy, Fizz or Mijji); in the room the players hop around
+  the forest with their bunnies as in the original menu. Names are unique among the people online.
 - Anybody can sit a match out and watch it. People who come in while a match runs, or when all four bunnies are
   taken, are spectators and watch the running match live.
 - The host chooses the level (from a scrolling list of 250+ levels) and the score limit (first to 5, 10, 25, 50
@@ -45,7 +45,7 @@ Features of the online mode:
   under **LAST MATCH**.
 - All menus work with the keyboard (arrow keys, Enter, Escape) as well as the mouse. Gamepads work without any
   setup, in the menus and in the game.
-- Phones and tablets (**beta**): translucent pixel buttons outside the game screen, see below.
+- [Phones and tablets](#phones-and-tablets): portrait and landscape layouts with touch controls outside the game.
 - Local settings per player: controls, mute music or sound effects, no gore, no flies.
 
 The original local game (up to four players on one keyboard, with computer players) is still available: **Local
@@ -162,26 +162,27 @@ accents and a few missing symbols) and the bunny sprites, with square pixels and
 
 Cheats and the 1-4 computer-player keys are disabled online, and each browser controls one bunny.
 
-## Phones and tablets (beta)
+## Phones and tablets
 
-The mobile version is a **beta**: it works, but it has seen far less testing than the desktop version, especially
-on real devices, so expect rough edges.
+Play in portrait or landscape with touch controls, in both online and local games. The menu and game keep their
+original proportions and use the largest screen area that fits alongside the controls, on a plain black background.
 
-- The menu and game share a 400x256 screen, preserving the original proportions without internal black bars.
-  It uses the largest size that fits alongside usable touch controls, with a plain black background.
-- Phones and tablets have translucent pixel buttons. ESC stays in the upper-left corner and fullscreen in
-  the upper-right. Left/right sit together under the left thumb, with jump under the right thumb; the movement
-  row is lifted away from the bottom edge. The layout maximizes the game within these grip margins.
-- The music-note and speaker buttons toggle music and sound effects independently, including during a match.
-  A slash marks a muted channel. These preferences are saved and also apply to local play.
-- Buttons never cover the game or intercept touches inside it. Their targets stay at least 48 CSS pixels
-  across, with larger movement keys. Both the game and controls respect the browser's cutout and home-indicator
-  insets, which are refreshed on rotation, fullscreen changes and changes to the safe area itself.
-- All button outlines and icons share the same square pixel grid, including when pressed. With touch controls
-  disabled, the game uses the entire available viewport while keeping its original aspect ratio.
-- The touch buttons can be turned off under **OPTIONS**; a keyboard or a gamepad works alongside them.
-  Computers show no touch controls.
-- Music needs an HTTPS address, and some browsers only offer gamepads to HTTPS pages.
+|                                                             Landscape                                                              |                                                            Portrait                                                             |
+| :--------------------------------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------------------------------: |
+| <img src="screenshots/mobile-landscape.png" alt="An online match in landscape with movement controls beside the game" width="560"> | <img src="screenshots/mobile-portrait.png" alt="An online match in portrait with movement controls below the game" width="220"> |
+
+- **Move and jump:** left/right sit together under the left thumb, with jump under the right thumb. The buttons
+  stay clear of the game and leave room for your grip above the bottom edge.
+- **ESC and fullscreen:** ESC stays in the upper-left corner and fullscreen in the upper-right, in either orientation.
+- **Music and sound:** the music-note and speaker buttons toggle music and sound effects independently, even
+  during a match. A slash marks a muted channel; the game remembers these preferences.
+- **Screen fit:** the game keeps its original aspect ratio, and the translucent controls share one consistent
+  pixel grid. Both stay within the safe area around camera cutouts and home indicators, including after rotation
+  or fullscreen changes.
+- **Other controls:** keyboards and gamepads work alongside touch. Turn touch buttons off under **OPTIONS** to
+  give the game the entire available area. Computers show no touch controls.
+
+Music needs HTTPS or localhost; some browsers also require HTTPS for gamepads.
 
 ## How the netcode works
 
