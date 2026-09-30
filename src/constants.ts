@@ -1,3 +1,6 @@
+// Changed by dox187 on 2026-09-30 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
+// Includes the 8 kHz sound effect correction by Teqnosys from 2026-09-11.
+
 import { GameInputDevice } from 'inputs';
 
 export enum OBJ {

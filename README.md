@@ -24,6 +24,14 @@ This repository is a fork of jumpnbump.js. It keeps the original local game and 
 and a server. The game physics are unchanged: the player movement, collision and scoring code is the same code,
 moved into a shared module, and a test comparing the old and new code on every level found no difference.
 
+### Contributions from other forks
+
+- The 8 kHz sound effect correction comes from
+  [Teqnosys/jumpnbump.js](https://github.com/Teqnosys/jumpnbump.js). The commit was cherry-picked with its original
+  author and a reference to the source commit preserved in the git history.
+- **Moonlit Canopy**, a moonlit forest arena, and its preview were imported from
+  [logsol/jumpnbump.js](https://github.com/logsol/jumpnbump.js).
+
 ## What it is good for
 
 - Playing Jump 'n Bump with friends who are not in the same room, over the internet or the local network.
@@ -253,7 +261,7 @@ Jump 'n Bump is distributed under the GNU General Public License, version 2, or 
 This fork was changed from [jumpnbump.js](https://github.com/jamsinclair/jumpnbump.js) by dox187 on 2026-09-29 and
 2026-09-30 (see [Changes compared with jumpnbump.js](#changes-compared-with-jumpnbumpjs) and the git history). Each
 changed file, and each new file that contains code from jumpnbump.js, says so in its first lines; this README,
-`package.json` and `package-lock.json` were changed as well.
+`package.json`, `package-lock.json` and `src/web/levels.json` were changed as well.
 
 ## Server capacity and load testing
 

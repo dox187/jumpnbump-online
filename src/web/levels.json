@@ -1460,6 +1460,16 @@
         "datFile": "moon2.dat"
     },
     {
+        "imageUrl": "moonlit-canopy.jpg",
+        "name": "Moonlit Canopy",
+        "author": "logsol fork",
+        "authorUrl": "https://github.com/logsol/jumpnbump.js",
+        "description": "A moonlit forest arena with mossy ruins, a waterfall, and layered platforms.",
+        "size": "390 KB",
+        "downloads": "0",
+        "datFile": "moonlit-canopy.dat"
+    },
+    {
         "imageUrl": "moreair.jpg",
         "name": "More Air",
         "author": "Proto Bailey",
