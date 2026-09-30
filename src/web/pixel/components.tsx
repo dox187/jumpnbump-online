@@ -124,8 +124,8 @@ export function pixel_variables(scale: number) {
 }
 
 /**
- * The screen with the 400x256 stage, framed by the Shell (plain black on a desktop, a wooden handheld on
- * phones). The arrow keys move the focus between its controls;
+ * The 400x256 stage on black, with touch controls outside it on mobile devices.
+ * The arrow keys move the focus between its controls;
  * `navSkip` returns true for keydown events the navigation must leave alone.
  */
 export function Stage({

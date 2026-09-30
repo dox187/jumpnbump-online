@@ -45,7 +45,7 @@ Features of the online mode:
   under **LAST MATCH**.
 - All menus work with the keyboard (arrow keys, Enter, Escape) as well as the mouse. Gamepads work without any
   setup, in the menus and in the game.
-- Phones and tablets (**beta**): touch buttons in a wooden handheld frame, see below.
+- Phones and tablets (**beta**): translucent pixel buttons outside the game screen, see below.
 - Local settings per player: controls, mute music or sound effects, no gore, no flies.
 
 The original local game (up to four players on one keyboard, with computer players) is still available: **Local
@@ -168,15 +168,15 @@ The mobile version is a **beta**: it works, but it has seen far less testing tha
 on real devices, so expect rough edges.
 
 - The menu and game share a 400x256 screen, preserving the original proportions without internal black bars.
-  It fills the available height on landscape phones (16:9 or wider), and the width in portrait.
-- On phones and tablets a wooden pixel-art frame holds the touch buttons: left, right, jump, BACK for ESC and
-  FULL for fullscreen. They sit beside the screen on wide phones and below it in portrait or on squarer tablets,
-  including 4:3 iPads. Computers never show them.
-- All frame artwork and buttons share one pixel grid. The wood is cropped at its native size, never stretched
-  to fill a panel; the assembled frame is enlarged once with the same square pixels throughout.
-- Touch targets stay at least 48 CSS pixels across. Narrow landscape phones stack the direction buttons;
-  the keys can extend slightly over the screen edges to keep them usable. Notches and home indicators leave
-  safe margins for the controls.
+  It uses the largest size that fits alongside usable touch controls, with a plain black background.
+- Phones and tablets have translucent pixel buttons for left, right, jump, ESC and fullscreen. The layout
+  compares side columns and bottom rows, choosing whichever leaves more room for the game. On very small
+  screens it can put ESC and fullscreen beside the game and the movement buttons below. Computers show no
+  touch controls.
+- Buttons never cover the game or intercept touches inside it. Their targets stay at least 48 CSS pixels
+  across, with larger movement keys when spare space allows. Notches and home indicators leave safe margins.
+- All button outlines and icons share the same square pixel grid, including when pressed. With touch controls
+  disabled, the game uses the entire available viewport while keeping its original aspect ratio.
 - The touch buttons can be turned off under **OPTIONS**; a keyboard or a gamepad works alongside them.
 - Music needs an HTTPS address, and some browsers only offer gamepads to HTTPS pages.
 

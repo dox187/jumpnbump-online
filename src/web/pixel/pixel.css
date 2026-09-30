@@ -482,9 +482,9 @@
     animation: gp-blink 1s steps(1) infinite;
 }
 
-/* The woodland handheld around the screen on phones (console.tsx) */
+/* Translucent pixel controls outside the game screen on phones and tablets (console.tsx). */
 
-.gp-handheld {
+.gp-touch-shell {
     display: block;
     overflow: hidden;
     touch-action: none;
@@ -492,7 +492,7 @@
     -webkit-tap-highlight-color: transparent;
 }
 
-.gp-handheld .gp-body {
+.gp-controls-art {
     position: absolute;
     left: 0;
     top: 0;
