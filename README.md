@@ -101,7 +101,7 @@ npm start       # serves everything on http://0.0.0.0:8080
 | `STATIC_DIR`         | `dist`               | The built website                                                                  |
 | `LEVELS_DIR`         | `$STATIC_DIR/levels` | Where the server reads level files from (it needs their collision maps)            |
 | `TRUST_PROXY`        | off                  | Set to `1` behind a reverse proxy so rate limits see `X-Forwarded-For`             |
-| `VITE_SOURCE_URL`    | upstream repository  | Build time: where the **SOURCE** link points; use your fork if you change the code |
+| `VITE_SOURCE_URL`    | this repository      | Build time: where the **SOURCE** link points; use your fork if you change the code |
 
 Rooms and matches live in memory; restarting the server closes them.
 

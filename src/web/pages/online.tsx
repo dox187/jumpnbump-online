@@ -56,7 +56,7 @@ const onlinePageMeta: PageMeta = {
 };
 
 /** Where the Source links point; set VITE_SOURCE_URL at build time when you publish your own changes. */
-const SOURCE_URL = import.meta.env.VITE_SOURCE_URL || 'https://github.com/jamsinclair/jumpnbump.js';
+const SOURCE_URL = import.meta.env.VITE_SOURCE_URL || 'https://github.com/dox187/jumpnbump-online';
 
 type Toast = { message: string; color: TextColor; seq: number; at: number; ms?: number };
 
