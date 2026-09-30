@@ -9,13 +9,16 @@ import { useEffect, useRef } from 'preact/hooks';
 import { object_anims } from '../../animation';
 import { OBJ_ANIM, SCREEN_HEIGHT } from '../../constants';
 import { GameAssets, Sprite } from './assets';
-import { STAGE_HEIGHT, STAGE_WIDTH, gp, icon_canvas } from './components';
+import { STAGE_HEIGHT, STAGE_WIDTH, Text, gp, icon_canvas } from './components';
 import { TextColor, fit_text, render_text } from './font';
 import { HOP_MAX_X, HOP_SPOTS, HopBunny } from './hop';
 
 /** Where the 400x256 menu screen sits on the stage. */
 export const SCENE_X = 40;
 export const SCENE_Y = 16;
+/** The logo sits in the black header above the forest; lift only that strip to make room for the host. */
+const MENU_HEADER_HEIGHT = 63;
+const LOGO_LIFT = 14;
 
 /**
  * Standing spots of the four bunnies (stage coordinates of the 16x16 player box): on the grass and on the log,
@@ -373,7 +376,28 @@ export function Scene({
         const draw = () => {
             context.fillStyle = '#000';
             context.fillRect(0, 0, STAGE_WIDTH, STAGE_HEIGHT);
-            context.drawImage(assets.menu, SCENE_X, SCENE_Y);
+            context.drawImage(
+                assets.menu,
+                0,
+                0,
+                400,
+                MENU_HEADER_HEIGHT,
+                SCENE_X,
+                SCENE_Y - LOGO_LIFT,
+                400,
+                MENU_HEADER_HEIGHT
+            );
+            context.drawImage(
+                assets.menu,
+                0,
+                MENU_HEADER_HEIGHT,
+                400,
+                SCREEN_HEIGHT - MENU_HEADER_HEIGHT,
+                SCENE_X,
+                SCENE_Y + MENU_HEADER_HEIGHT,
+                400,
+                SCREEN_HEIGHT - MENU_HEADER_HEIGHT
+            );
             context.fillStyle = '#000';
             for (const fly of flies) context.fillRect(fly.x, fly.y, 1, 1);
             const now = performance.now();
@@ -436,16 +460,24 @@ export function Scene({
     }, [assets]);
 
     return (
-        <canvas
-            ref={canvas_ref}
-            width={STAGE_WIDTH}
-            height={STAGE_HEIGHT}
-            aria-hidden="true"
-            className="gp-abs"
-            style={{ left: 0, top: 0, width: gp(STAGE_WIDTH), height: gp(STAGE_HEIGHT) }}
-            // The mouse can be your control: no context menu or middle-click scrolling over the forest
-            onContextMenu={own ? (e) => e.preventDefault() : undefined}
-            onMouseDown={own ? (e) => e.button !== 0 && e.preventDefault() : undefined}
-        />
+        <>
+            <canvas
+                ref={canvas_ref}
+                width={STAGE_WIDTH}
+                height={STAGE_HEIGHT}
+                aria-hidden="true"
+                className="gp-abs"
+                style={{ left: 0, top: 0, width: gp(STAGE_WIDTH), height: gp(STAGE_HEIGHT) }}
+                // The mouse can be your control: no context menu or middle-click scrolling over the forest
+                onContextMenu={own ? (e) => e.preventDefault() : undefined}
+                onMouseDown={own ? (e) => e.button !== 0 && e.preventDefault() : undefined}
+            />
+            <div
+                className="gp-abs"
+                style={{ left: 0, top: gp(50), width: gp(STAGE_WIDTH), display: 'flex', justifyContent: 'center' }}
+            >
+                <Text text={window.location.hostname} color="dim" maxWidth={STAGE_WIDTH - 16} />
+            </div>
+        </>
     );
 }
