@@ -129,13 +129,16 @@ function At({
     );
 }
 
-/** A link in the game font; without `href` it is a button. */
+/** A link in the game font; without `href` it is a button. Links to other sites open in a new window. */
 function TextLink({ href, label, onClick }: { href?: string; label: string; onClick?: () => void }) {
     const [hot, setHot] = useState(false);
     const Tag = href ? 'a' : 'button';
+    const external = href !== undefined && /^https?:\/\//.test(href);
     return (
         <Tag
             href={href}
+            target={external ? '_blank' : undefined}
+            rel={external ? 'noopener noreferrer' : undefined}
             type={href ? undefined : 'button'}
             className="inline-flex cursor-pointer"
             onClick={onClick}

@@ -4,4 +4,5 @@ export type Level = {
     imageUrl: string;
 };
 
-export const RECOMMENDED_LEVELS = ['acidb.dat', 'industri.dat', 'jumpbump.dat', 'multi.dat', 'stilts.dat', 'terra.dat'];
+/** The levels at the top of the level picker, in this order. */
+export const RECOMMENDED_LEVELS = ['jumpbump.dat', 'acidb.dat', 'industri.dat', 'multi.dat', 'stilts.dat', 'terra.dat'];

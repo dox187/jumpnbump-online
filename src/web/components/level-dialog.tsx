@@ -10,10 +10,12 @@ import levels from '../levels.json';
 import { level_thumbnail } from '../pixel/assets';
 import { Dialog, PixelCanvas, Text, TextInput, gp } from '../pixel/components';
 
-/** The recommended levels first, then all the others in alphabetical order. */
+/** The recommended levels first, in their own order, then all the others in alphabetical order. */
 export const ORDERED_LEVELS: Level[] = [
-    ...levels.filter((l) => RECOMMENDED_LEVELS.includes(l.datFile)),
-    ...levels.filter((l) => !RECOMMENDED_LEVELS.includes(l.datFile)),
+    ...RECOMMENDED_LEVELS.flatMap((dat) => levels.filter((l) => l.datFile === dat)),
+    ...levels
+        .filter((l) => !RECOMMENDED_LEVELS.includes(l.datFile))
+        .sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base', numeric: true })),
 ];
 
 /** Height of the grid in game pixels: three rows of cards plus the padding for the focus outline. */
