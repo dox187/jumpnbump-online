@@ -5,7 +5,8 @@ import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../../constants';
 import { usePageMeta } from '../hooks/page-meta';
 import { useOnlineSettings } from '../hooks/online-settings';
 import { load_game_assets } from '../pixel/assets';
-import { Button, Panel, Text, gp, pixel_variables, usePixelScale } from '../pixel/components';
+import { Button, Panel, Text, gp, pixel_variables } from '../pixel/components';
+import { Shell } from '../pixel/console';
 import '../pixel/pixel.css';
 
 const LEVEL_URL = '/levels/jumpbump.dat';
@@ -23,7 +24,6 @@ export default function Local() {
     const [running, setRunning] = useState(false);
     const [failed, setFailed] = useState(false);
     const [fontReady, setFontReady] = useState(false);
-    const scale = usePixelScale(SCREEN_WIDTH, SCREEN_HEIGHT);
 
     useEffect(() => {
         if (!loaded) return;
@@ -71,37 +71,35 @@ export default function Local() {
     }, [loaded]);
 
     return (
-        <div className="gp-root" style={pixel_variables(scale)}>
-            <div className="gp-stage" style={{ width: gp(SCREEN_WIDTH), height: gp(SCREEN_HEIGHT) }}>
-                <canvas
-                    ref={canvasRef}
+        <Shell width={SCREEN_WIDTH} height={SCREEN_HEIGHT} style={pixel_variables}>
+            <canvas
+                ref={canvasRef}
+                className="gp-abs"
+                style={{
+                    left: 0,
+                    top: 0,
+                    width: gp(SCREEN_WIDTH),
+                    height: gp(SCREEN_HEIGHT),
+                    visibility: running ? 'visible' : 'hidden',
+                }}
+            />
+            {failed && (
+                <div
                     className="gp-abs"
-                    style={{
-                        left: 0,
-                        top: 0,
-                        width: gp(SCREEN_WIDTH),
-                        height: gp(SCREEN_HEIGHT),
-                        visibility: running ? 'visible' : 'hidden',
-                    }}
-                />
-                {failed && (
-                    <div
-                        className="gp-abs"
-                        style={{ inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                        {fontReady ? (
-                            <Panel className="gp-col" style={{ alignItems: 'center' }}>
-                                <Text text="THE GAME COULD NOT BE LOADED" color="red" />
-                                <Button label="BACK" onClick={() => route('/')} />
-                            </Panel>
-                        ) : (
-                            <p>
-                                The game could not be loaded. <a href="/">Back</a>
-                            </p>
-                        )}
-                    </div>
-                )}
-            </div>
-        </div>
+                    style={{ inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                    {fontReady ? (
+                        <Panel className="gp-col" style={{ alignItems: 'center' }}>
+                            <Text text="THE GAME COULD NOT BE LOADED" color="red" />
+                            <Button label="BACK" onClick={() => route('/')} />
+                        </Panel>
+                    ) : (
+                        <p>
+                            The game could not be loaded. <a href="/">Back</a>
+                        </p>
+                    )}
+                </div>
+            )}
+        </Shell>
     );
 }

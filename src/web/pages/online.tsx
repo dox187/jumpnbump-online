@@ -3,7 +3,7 @@ import { lazy } from 'preact-iso';
 import { PageMeta, usePageMeta } from '../hooks/page-meta';
 import { useNet } from '../hooks/net';
 import { useGamepads } from '../hooks/gamepads';
-import { OnlineSettings, useOnlineSettings } from '../hooks/online-settings';
+import { OnlineSettings, touch_enabled, useOnlineSettings } from '../hooks/online-settings';
 import { ConfigureController } from '../components/configure-controller';
 import { LevelDialog, Thumbnail } from '../components/level-dialog';
 import { MAPPINGS, getFriendlyGamepadName, getGamepadId, getKnownGamepadDefaults } from '../controls';
@@ -515,6 +515,11 @@ function OptionsDialog({
                             label="No flies"
                             checked={settings.noFlies}
                             onChange={(noFlies) => updateSettings({ noFlies })}
+                        />
+                        <Checkbox
+                            label="Touch buttons"
+                            checked={touch_enabled(settings)}
+                            onChange={(touch) => updateSettings({ touch })}
                         />
                     </div>
                     {!musicAvailable && (
