@@ -404,8 +404,9 @@ export function Scene({
             const own = own_ref.current;
             const others = remote_ref.current?.();
             const tags: [tag: SceneTag, x: number, y: number, layer: number][] = [];
-            // Back to front like the menu: Dott is drawn last, on top
-            for (const b of [...states.values()].sort((a, c) => c.slot - a.slot)) {
+            // Back to front like the menu (draw_pobs paints its list in reverse): each bunny has its own ground
+            // line, 2 pixels lower per slot, so Dott stands furthest back and Mijji in front, on top
+            for (const b of [...states.values()].sort((a, c) => a.slot - c.slot)) {
                 let x = b.x;
                 let y = b.y + b.dy;
                 let image = 0;
