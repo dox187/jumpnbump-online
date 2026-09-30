@@ -2,6 +2,7 @@ import { assert } from '../c';
 import { get_gob, Gob } from '../assets';
 import { PalettedRenderer } from './paletted-renderer';
 import { PALETTE_256_SIZE, SCREEN_HEIGHT, SCREEN_WIDTH } from '../constants';
+export { toggle_fullscreen } from '../fullscreen';
 
 let drawing_enable = 0;
 
@@ -153,13 +154,5 @@ export function put_text(page: number, x: number, y: number, text: string, align
 
         put_pob(page, cur_x, y, image, font_gobs, 2, null);
         cur_x += pob_width(image, font_gobs) + 1;
-    }
-}
-
-export function toggle_fullscreen() {
-    if (document.fullscreenElement) {
-        document.exitFullscreen();
-    } else {
-        document.body.requestFullscreen();
     }
 }

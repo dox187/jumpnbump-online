@@ -1,0 +1,59 @@
+{
+    "style_reference": {
+        "source": "public/levels/jumpbump.dat:menu.pcx",
+        "crop": {
+            "x": 0,
+            "y": 63,
+            "width": 400,
+            "height": 134
+        },
+        "content": "Original forest game scenery only. No lobby UI or previous console artwork was provided as a design reference."
+    },
+    "generation_brief": "A fresh woodland pixel-art handheld console, with sculpted tree trunks and roots, worn heartwood, sparse moss and leaves, varied irregular silhouettes and quiet areas. A thin border around a black game display, a connected two-direction wooden rocker, an irregular rabbit button and two small utility keys. No MOVE or JUMP captions, repeating wood tiles, generic rectangular controls or padded screen shadow. All final artwork is rasterized to one native pixel grid.",
+    "assets": [
+        {
+            "file": "portrait.png",
+            "native_size": [200, 432],
+            "final_edit_prompt": "Use case: precise-object-edit. Edit target: this portrait wooden pixel-art game console. Change ONLY the rabbit-shaped engraving on the jump button at the right. Replace that rabbit cavity with ONE simple UPWARD-POINTING TRIANGLE, with no shaft, stem, chevron or extra marks. The triangle must be exactly the same shape and treatment as the existing left/right triangular engravings on the joined rocker: imagine duplicating the rocker's right-facing triangle and rotating it 90 degrees counterclockwise. Same proportions, same dark brown recessed cavity, same thin carved wood edge, same pixel-art surface shading. Place it at the optical center of the jump button's front cut-wood face. Keep the irregular jump button's outer silhouette, wood rings, perspective and material exactly as they are. Preserve all other controls, all other pixels, the two blank utility buttons, blank top bridge, foliage, roots, pure-black screen opening and framing. Do not add text, logos, rabbits or new decorations. Same aspect ratio and colors.",
+            "preparation": "Nearest-neighbor reduction to the native raster; 96-color palette without dithering. The runtime composes each shell around a strictly 4:3 screen and draws the original logo and actual player-name lettering on the final native grid.",
+            "previous_edit_prompt": "Use case: precise-object-edit. Edit target: the attached portrait wooden pixel-art game console. Remove ONLY the burned words on the top bridge and the Back and Full letters on the two small bottom buttons. Replace those letter pixels with natural unmarked wood matching their immediate surroundings. Keep the top bridge as a smooth warm wooden area where the ORIGINAL game logo will be added by code later. Keep the two small key faces blank natural dark wood. Preserve absolutely all other artwork, positions, proportions, colors, lighting, outlines, foliage, rocker arrows, rabbit symbol and the entire pure-black display opening. Do not redesign anything, do not add any words or new symbols. Same portrait aspect ratio and framing, flat front-facing pixel-art. No text anywhere."
+        },
+        {
+            "file": "landscape.png",
+            "native_size": [432, 200],
+            "final_edit_prompt": "Use case: precise-object-edit. Edit target: this landscape wooden pixel-art game console. Change ONLY the rabbit-shaped engraving on the jump button at the right. Replace that rabbit cavity with ONE simple UPWARD-POINTING TRIANGLE, with no shaft, stem, chevron or extra marks. The triangle must be exactly the same shape and treatment as the existing left/right triangular engravings on the joined rocker: imagine duplicating the rocker's right-facing triangle and rotating it 90 degrees counterclockwise. Same proportions, same dark brown recessed cavity, same thin carved wood edge, same pixel-art surface shading. Place it at the optical center of the jump button's front cut-wood face. Keep the irregular jump button's outer silhouette, wood rings, perspective and material exactly as they are. Preserve all other controls, all other pixels, the two blank utility buttons, blank top bridge, foliage, roots, pure-black screen opening and framing. Do not add text, logos, rabbits or new decorations. Same aspect ratio and colors.",
+            "preparation": "Nearest-neighbor reduction to the native raster; 96-color palette without dithering. The runtime composes each shell around a strictly 4:3 screen and draws the original logo and actual player-name lettering on the final native grid.",
+            "previous_edit_prompt": "Use case: precise-object-edit. Edit target: the attached landscape wooden pixel-art game console. Remove ONLY the burned Jump n Bump lettering and its two little decorative twig marks on the top wooden bridge. Replace the letter pixels with smooth natural unmarked wood matching the immediate surroundings, ready for the ORIGINAL game logo to be added by code later. Preserve absolutely all other artwork, positions, proportions, colors, lighting, outlines, foliage, two blank small utility buttons, rocker arrows, rabbit symbol and the entire pure-black display opening. Do not redesign anything, do not add any words or new symbols. Same landscape aspect ratio and framing, flat front-facing pixel-art. No text anywhere."
+        },
+        {
+            "file": "portrait-body.png",
+            "native_size": [200, 432],
+            "final_edit_prompt": "Use case: precise-object-edit. Asset type: clean background plate for a responsive pixel-art game UI; interactive buttons will be composited back from the existing artwork by code. Edit target is this portrait wooden console. Remove ONLY the four raised wooden control pieces below the screen: the entire joined arrow rocker, the entire rabbit button, and both small round blank buttons. Fill their footprints and their surrounding dark crevices with continuous natural carved wood matching the broad heartwood console body, restrained grain with varied smooth patches, not repetitive fine texture. Preserve the existing trunks, roots, foliage, blank top bridge, exact silhouette, pure-black screen aperture, aperture position and size, colors, pixel-art style, and entire image framing. Keep all pixels outside these four control footprints as close as possible to the original. Do not add controls, letters, logos, engravings, holes, ornaments or new symbols. Same aspect ratio.",
+            "preparation": "Nearest-neighbor reduction to the native raster; 96-color palette without dithering. Buttons are separate masked sprites from the matching illustration, placed proportionally and drawn on the same final native grid. The body adapts around the 4:3 screen."
+        },
+        {
+            "file": "landscape-body.png",
+            "native_size": [432, 200],
+            "final_edit_prompt": "Use case: precise-object-edit. Asset type: clean background plate for a responsive pixel-art game UI; interactive buttons will be composited back from the existing artwork by code. Edit target is this landscape wooden console. Remove ONLY the four raised wooden control pieces beside the screen: the entire joined arrow rocker on the left, the entire rabbit button on the right, and both small round blank buttons above them. Fill their footprints and surrounding dark crevices with continuous natural carved wood matching the sculpted side trunks, restrained grain with varied smooth patches, not repetitive fine texture. Preserve the existing roots, foliage, blank top bridge, exact silhouette, pure-black screen aperture, aperture position and size, colors, pixel-art style, and entire image framing. Keep all pixels outside these four control footprints as close as possible to the original. Do not add controls, letters, logos, engravings, holes, ornaments or new symbols. Same aspect ratio.",
+            "preparation": "Nearest-neighbor reduction to the native raster; 96-color palette without dithering. Buttons are separate masked sprites from the matching illustration, placed proportionally and drawn on the same final native grid. The body adapts around the 4:3 screen."
+        }
+    ],
+    "original_logo": {
+        "file": "original-logo.png",
+        "source": "public/levels/jumpbump.dat:menu.pcx",
+        "crop": {
+            "x": 129,
+            "y": 19,
+            "width": 147,
+            "height": 28
+        },
+        "preparation": "Original letter faces are used as a native-resolution carving stencil. The original blue extrusion and green shadow are excluded. The runtime shades the actual underlying wood pixels into charred grooves, a recessed lower wall, and a narrow lit upper lip; no translucent logo overlay is used.",
+        "placement": "Portrait: 55 native pixels wide, centered directly below the display and above the movement controls. Landscape: 58 native pixels wide in the top wood bridge, with its top three native pixels above the preceding placement."
+    },
+    "utility_lettering": {
+        "source": "src/online/panel-names.ts:render_panel_name",
+        "slot": 0,
+        "text": ["back", "full"],
+        "appearance": "Dark, grain-textured carving with a warm highlight immediately above the letters. Labels match the optical center and tilt of each wood face. Adjacent source stroke pixels are reconnected after rotation, preserving four separate, continuous letters for both Back and Full."
+    }
+}

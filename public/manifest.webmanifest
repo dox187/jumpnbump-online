@@ -1,0 +1,19 @@
+{
+    "id": "/",
+    "name": "Jump 'n Bump Online",
+    "short_name": "Jump 'n Bump",
+    "start_url": "/",
+    "scope": "/",
+    "display": "fullscreen",
+    "orientation": "any",
+    "background_color": "#000000",
+    "theme_color": "#201308",
+    "icons": [
+        {
+            "src": "/jumpnbump.png",
+            "sizes": "96x96",
+            "type": "image/png",
+            "purpose": "any"
+        }
+    ]
+}

@@ -4,7 +4,7 @@ import { BUNNY_NAMES, MatchInfo } from '../../net/protocol';
 import type { GameInputDevice } from '../../inputs';
 import type { Countdown, OnlineGame, OnlineGamePhase } from '../../online/online-game';
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../../constants';
-import { Button, Panel, Text, gp, pixel_variables } from '../pixel/components';
+import { Button, FullscreenHelp, Panel, Text, gp, pixel_variables } from '../pixel/components';
 import { Shell } from '../pixel/console';
 import '../pixel/pixel.css';
 
@@ -153,7 +153,7 @@ export default function OnlineMatch({
     const escHint = spectating ? 'back' : isHost ? 'end match' : 'leave';
 
     return (
-        <Shell width={SCREEN_WIDTH} height={SCREEN_HEIGHT} style={pixel_variables}>
+        <Shell width={SCREEN_WIDTH} height={SCREEN_HEIGHT} style={pixel_variables} fullscreenHelp={FullscreenHelp}>
             <canvas
                 ref={canvasRef}
                 className="gp-abs"

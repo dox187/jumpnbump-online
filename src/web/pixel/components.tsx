@@ -7,6 +7,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/ho
 import { LINE_HEIGHT, TextColor, fit_text, render_text, text_width, wrap_text } from './font';
 import { useDialogFocus, useKeyboardNav } from './keyboard-nav';
 import { Shell } from './console';
+import { FullscreenHelpProps, is_ios } from '../../fullscreen';
 
 /** The menu fills the 4:3 screen: as wide as the game (and the menu forest), with room above and below. */
 export const STAGE_WIDTH = 400;
@@ -136,7 +137,13 @@ export function Stage({
     const [stage, setStage] = useState<HTMLDivElement | null>(null);
     useKeyboardNav(stage, navSkip);
     return (
-        <Shell width={STAGE_WIDTH} height={STAGE_HEIGHT} style={pixel_variables} stageRef={setStage}>
+        <Shell
+            width={STAGE_WIDTH}
+            height={STAGE_HEIGHT}
+            style={pixel_variables}
+            stageRef={setStage}
+            fullscreenHelp={FullscreenHelp}
+        >
             {children}
         </Shell>
     );
@@ -535,6 +542,48 @@ export function Dialog({
                 {children}
             </div>
         </div>
+    );
+}
+
+/** A browser without fullscreen still has a useful FULL button. */
+export function FullscreenHelp({ issue, onClose }: FullscreenHelpProps) {
+    useEffect(() => {
+        // Dismiss this guide without also closing the lobby dialog or leaving a running match.
+        const escape = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            onClose();
+        };
+        window.addEventListener('keydown', escape, true);
+        return () => window.removeEventListener('keydown', escape, true);
+    }, [onClose]);
+
+    const ios = is_ios();
+    const lines =
+        issue === 'app'
+            ? ['Already running without browser bars.', 'System bars are controlled by your device.']
+            : ios
+              ? [
+                    'For a view without browser bars:',
+                    '1. Open this site in Safari.',
+                    '2. Share > Add to Home Screen.',
+                    '3. Enable Open as Web App if shown.',
+                    '4. Launch the new Home Screen icon.',
+                ]
+              : [
+                    issue === 'denied' ? 'The browser blocked fullscreen.' : 'Fullscreen is unavailable here.',
+                    'Open this site in your regular browser, or launch it from your Home Screen.',
+                ];
+    return (
+        <Dialog title={issue === 'app' ? 'HOME SCREEN MODE' : 'FULL SCREEN'} width={350} onClose={onClose}>
+            <div className="gp-col" style={{ gap: gp(5) }}>
+                {lines.map((text) => (
+                    <Paragraph key={text} text={text} width={330} />
+                ))}
+                <Button label="GOT IT" onClick={onClose} />
+            </div>
+        </Dialog>
     );
 }
 

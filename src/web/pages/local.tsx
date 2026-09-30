@@ -5,7 +5,7 @@ import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../../constants';
 import { usePageMeta } from '../hooks/page-meta';
 import { useOnlineSettings } from '../hooks/online-settings';
 import { load_game_assets } from '../pixel/assets';
-import { Button, Panel, Text, gp, pixel_variables } from '../pixel/components';
+import { Button, FullscreenHelp, Panel, Text, gp, pixel_variables } from '../pixel/components';
 import { Shell } from '../pixel/console';
 import '../pixel/pixel.css';
 
@@ -71,7 +71,7 @@ export default function Local() {
     }, [loaded]);
 
     return (
-        <Shell width={SCREEN_WIDTH} height={SCREEN_HEIGHT} style={pixel_variables}>
+        <Shell width={SCREEN_WIDTH} height={SCREEN_HEIGHT} style={pixel_variables} fullscreenHelp={FullscreenHelp}>
             <canvas
                 ref={canvasRef}
                 className="gp-abs"
