@@ -245,3 +245,36 @@ This fork was changed from [jumpnbump.js](https://github.com/jamsinclair/jumpnbu
 2026-09-30 (see [Changes compared with jumpnbump.js](#changes-compared-with-jumpnbumpjs) and the git history). Each
 changed file, and each new file that contains code from jumpnbump.js, says so in its first lines; this README,
 `package.json` and `package-lock.json` were changed as well.
+
+## Server capacity and load testing
+
+The server accepts up to **500 simultaneous WebSocket connections** and **100 rooms**, including rooms with a
+match in progress. Connections count from the moment they are accepted, including clients choosing a name,
+people in the main menu, players and spectators. The per-IP limit remains 16 connections. Each room supports
+four players and up to 16 people in total; with 100 rooms, up to 400 people can play at once.
+
+At capacity, new connections receive a server-full message and close with WebSocket code 1013. Creating a room
+beyond the room limit returns an error. A disconnected client frees its connection slot, and an empty room frees
+its room slot.
+
+On 2026-09-30, a load test on a four-core desktop CPU from 2017 with 16 GB RAM ran **500 users in 100 lobbies**:
+400 moving players and 100 spectators. Node clients ran on a separate machine, without browsers, through the
+public HTTPS/WSS endpoint and its reverse proxy. Two consecutive 60-second measurement windows produced:
+
+| Measurement                                                  | Result                       |
+| ------------------------------------------------------------ | ---------------------------- |
+| Average round-trip time                                      | 3.9-4.6 ms                   |
+| 95th-percentile round-trip time                              | 9.1-10.8 ms                  |
+| Worst individual client's 95th-percentile round-trip time    | 17.4 ms                      |
+| Total host CPU usage, including the proxy and other services | 50-52% across all four cores |
+| Application container memory during the measurement windows  | Up to 181.5 MiB              |
+| Application container memory peak over the entire run        | 232.7 MiB                    |
+| Unexpected disconnections                                    | 0 out of 500 clients         |
+
+All 400 players kept moving in the lobbies, and all 500 connections stayed up. The server and proxy together
+used about 47% of the four-core CPU. No swap-outs or out-of-memory events occurred.
+
+These are short load tests from the local network through the public endpoint, so the latency figures do not
+represent remote internet players. The 500-user test exercised lobby movement; it was not a 500-player match or
+a long-duration stability test. The limits reflect a tested, comfortable load on modest hardware, rather than
+an exact maximum or a guarantee for every host.

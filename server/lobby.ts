@@ -27,7 +27,8 @@ import { Match, Participant } from './match';
 
 const scrypt_async = promisify(scrypt) as (password: string, salt: Buffer, keylen: number) => Promise<Buffer>;
 
-const MAX_ROOMS = 200;
+const MAX_ROOMS = 100;
+const MAX_CLIENTS = 500;
 const MAX_CLIENTS_PER_IP = 16;
 const FAILED_JOIN_WINDOW_MS = 60000;
 const MAX_FAILED_JOINS = 5;
@@ -99,6 +100,8 @@ function name_key(name: string) {
 }
 
 export class Lobby {
+    /** Replaced clients still count until their sockets finish closing. */
+    private connections = new Set<WebSocket>();
     private clients = new Map<string, Client>();
     private rooms = new Map<string, Room>();
     private failed_joins = new Map<string, number[]>();
@@ -117,6 +120,15 @@ export class Lobby {
     }
 
     connect(ws: WebSocket, ip: string) {
+        if (this.connections.size >= MAX_CLIENTS) {
+            const error: ServerMessage = {
+                t: 'error',
+                message: `The server is full (${MAX_CLIENTS} connections). Please try again later.`,
+            };
+            ws.send(JSON.stringify(error));
+            ws.close(1013, 'Server is full. Please try again later.');
+            return;
+        }
         let from_ip = 0;
         for (const client of this.clients.values()) if (client.ip === ip) from_ip++;
         if (from_ip >= MAX_CLIENTS_PER_IP) {
@@ -138,6 +150,7 @@ export class Lobby {
             message_count: 0,
             busy: false,
         };
+        this.connections.add(ws);
         this.clients.set(client.id, client);
 
         ws.on('message', (data, is_binary) => {
@@ -165,6 +178,7 @@ export class Lobby {
         });
 
         ws.on('close', () => {
+            this.connections.delete(ws);
             this.leave_room(client);
             this.clients.delete(client.id);
             if (client.greeted) this.schedule_list_broadcast();
@@ -342,7 +356,7 @@ export class Lobby {
     private async create_room(client: Client, raw_name: unknown, raw_password: unknown) {
         if (client.busy) return;
         if (this.rooms.size >= MAX_ROOMS) {
-            this.send(client, { t: 'error', message: 'The server has too many rooms right now.' });
+            this.send(client, { t: 'error', message: `The server has reached its ${MAX_ROOMS}-room limit.` });
             return;
         }
         const name = clean_text(raw_name, ROOM_NAME_MAX_LENGTH) || `${client.name}'s room`;
@@ -356,6 +370,11 @@ export class Lobby {
             client.busy = false;
         }
         if (client.ws.readyState !== client.ws.OPEN) return;
+        // Another client may have filled the last room while the password was being hashed.
+        if (this.rooms.size >= MAX_ROOMS) {
+            this.send(client, { t: 'error', message: `The server has reached its ${MAX_ROOMS}-room limit.` });
+            return;
+        }
 
         this.leave_room(client);
         const room: Room = {
