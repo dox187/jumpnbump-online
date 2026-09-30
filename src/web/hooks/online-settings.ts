@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { dj_set_audio_preferences } from '../../sdl/sound';
 
 export type OnlineSettings = {
     name: string;
@@ -42,6 +43,7 @@ const listeners = new Set<(settings: OnlineSettings) => void>();
 function update(patch: Partial<OnlineSettings>) {
     const next = { ...(current ?? load()), ...patch };
     current = next;
+    dj_set_audio_preferences(next.muteMusic, next.muteEffects);
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     } catch {

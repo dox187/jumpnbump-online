@@ -1,6 +1,6 @@
 /**
  * The menu and game share the native 400x256 screen, with square pixels and no internal letterboxing.
- * Mobile controls occupy the black space beside or below the largest display that fits without overlap.
+ * Mobile controls keep comfortable thumb positions, clear utility corners and hardware-safe margins.
  */
 import type { ComponentChildren, ComponentType, JSX, Ref } from 'preact';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
@@ -18,11 +18,16 @@ import { draw_touch_controls } from './touch-art';
 import { screen_layout, type ButtonId, type Insets, type Rect, type ShellLayout } from './touch-layout';
 
 /** The safe area of phones with notches and rounded corners, in CSS pixels. */
-function safe_insets(): Insets {
+function safe_probe() {
     const probe = document.createElement('div');
     probe.style.cssText =
-        'position:fixed;visibility:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
+        'position:fixed;visibility:hidden;pointer-events:none;width:0;height:0;box-sizing:content-box;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
     document.body.appendChild(probe);
+    return probe;
+}
+
+function safe_insets(): Insets {
+    const probe = safe_probe();
     const style = getComputedStyle(probe);
     const insets = {
         top: parseFloat(style.paddingTop) || 0,
@@ -72,17 +77,27 @@ export function useShellLayout(): ShellLayout {
             late = window.setTimeout(update, 400);
         };
         update();
+        // Fullscreen/browser chrome can change the cutout insets after the viewport resize has finished.
+        const probe = safe_probe();
+        const observer = new ResizeObserver(schedule);
+        observer.observe(probe, { box: 'border-box' });
         window.addEventListener('resize', schedule);
         window.addEventListener('orientationchange', rotated);
-        document.addEventListener('fullscreenchange', schedule);
+        window.screen.orientation?.addEventListener('change', rotated);
+        document.addEventListener('fullscreenchange', rotated);
+        document.addEventListener('webkitfullscreenchange', rotated);
         window.visualViewport?.addEventListener('resize', schedule);
         return () => {
             clearTimeout(timer);
             clearTimeout(late);
             window.removeEventListener('resize', schedule);
             window.removeEventListener('orientationchange', rotated);
-            document.removeEventListener('fullscreenchange', schedule);
+            window.screen.orientation?.removeEventListener('change', rotated);
+            document.removeEventListener('fullscreenchange', rotated);
+            document.removeEventListener('webkitfullscreenchange', rotated);
             window.visualViewport?.removeEventListener('resize', schedule);
+            observer.disconnect();
+            probe.remove();
         };
     }, [touch]);
     return layout;
@@ -110,6 +125,22 @@ function TouchControls({
     closeHelp: (() => void) | null;
 }) {
     const [held, setHeld] = useState<Set<ButtonId>>(new Set());
+    const [settings, updateSettings] = useOnlineSettings();
+    const muted = useMemo(
+        () =>
+            new Set<ButtonId>([
+                ...(settings.muteMusic ? ['music' as const] : []),
+                ...(settings.muteEffects ? ['effects' as const] : []),
+            ]),
+        [settings.muteMusic, settings.muteEffects]
+    );
+    const action = useRef((id: ButtonId) => {});
+    action.current = (id) => {
+        if (id === 'back') press_escape();
+        else if (id === 'full') toggle_fullscreen();
+        else if (id === 'music') updateSettings({ muteMusic: !settings.muteMusic });
+        else if (id === 'effects') updateSettings({ muteEffects: !settings.muteEffects });
+    };
     const layoutRef = useRef(layout);
     layoutRef.current = layout;
     const helpRef = useRef(closeHelp);
@@ -121,7 +152,9 @@ function TouchControls({
         const pointers = new Map<number, ButtonId>();
         setHeld(new Set());
         const hit = (x: number, y: number): ButtonId | null => {
-            const { buttons, pixel_scale, box } = layoutRef.current;
+            const { buttons, pixel_scale, box, safe } = layoutRef.current;
+            if (x < safe.left || x >= innerWidth - safe.right || y < safe.top || y >= innerHeight - safe.bottom)
+                return null;
             // Even the forgiving touch margin must never intercept a tap inside the game or its menus.
             if (x >= box.x && x < box.x + box.w && y >= box.y && y < box.y + box.h) return null;
             const slack = 8;
@@ -162,12 +195,11 @@ function TouchControls({
             }
             pointers.set(event.pointerId, id);
             element.setPointerCapture(event.pointerId);
-            if (id === 'back') press_escape();
             apply();
         };
         const move = (event: PointerEvent) => {
             const current = pointers.get(event.pointerId);
-            if (!current || current === 'back' || current === 'full') return;
+            if (!current || (current !== 'left' && current !== 'right' && current !== 'jump')) return;
             const id = hit(event.clientX, event.clientY);
             // Slide between the movement buttons; leaving them releases
             const next = id === 'left' || id === 'right' || id === 'jump' ? id : null;
@@ -180,7 +212,7 @@ function TouchControls({
             const id = pointers.get(event.pointerId);
             if (pointers.delete(event.pointerId)) apply();
             // Touch activates restricted browser APIs on release, not on pointerdown.
-            if (id === 'full' && !helpRef.current && hit(event.clientX, event.clientY) === 'full') toggle_fullscreen();
+            if (id && !helpRef.current && hit(event.clientX, event.clientY) === id) action.current(id);
         };
         const cancel = (event: PointerEvent) => {
             if (pointers.delete(event.pointerId)) apply();
@@ -216,16 +248,38 @@ function TouchControls({
 
     return (
         <>
-            <ControlArtwork layout={layout} held={held} />
-            {(Object.entries(layout.buttons) as [ButtonId, Rect | undefined][]).map(
-                ([id, rect]) =>
+            <ControlArtwork layout={layout} held={held} muted={muted} />
+            {(Object.entries(layout.buttons) as [ButtonId, Rect | undefined][]).map(([id, rect]) => {
+                const utility = id === 'back' || id === 'full' || id === 'music' || id === 'effects';
+                const Tag = utility ? 'button' : 'div';
+                const label =
+                    id === 'back'
+                        ? 'Escape'
+                        : id === 'full'
+                          ? 'Toggle fullscreen'
+                          : id === 'music'
+                            ? 'Mute music'
+                            : 'Mute sound effects';
+                return (
                     rect && (
-                        <div
+                        <Tag
                             key={id}
+                            type={utility ? 'button' : undefined}
                             className="gp-touch-button"
                             data-button={id}
                             data-pressed={held.has(id)}
-                            aria-hidden="true"
+                            data-muted={muted.has(id)}
+                            aria-hidden={utility ? undefined : true}
+                            aria-label={utility ? label : undefined}
+                            aria-pressed={id === 'music' || id === 'effects' ? muted.has(id) : undefined}
+                            title={utility ? label : undefined}
+                            onClick={(event) => {
+                                // Pointer actions run on release above; keyboard/assistive activation has no pointer.
+                                if (utility && event.detail === 0) {
+                                    if (helpRef.current) helpRef.current();
+                                    else action.current(id);
+                                }
+                            }}
                             style={{
                                 left: control_px(rect.x),
                                 top: control_px(rect.y),
@@ -234,20 +288,21 @@ function TouchControls({
                             }}
                         />
                     )
-            )}
+                );
+            })}
         </>
     );
 }
 
-function ControlArtwork({ layout, held }: { layout: ShellLayout; held: Set<ButtonId> }) {
+function ControlArtwork({ layout, held, muted }: { layout: ShellLayout; held: Set<ButtonId>; muted: Set<ButtonId> }) {
     const ref = useRef<HTMLCanvasElement>(null);
     useLayoutEffect(() => {
         const canvas = ref.current;
         if (!canvas) return;
         canvas.width = layout.view.w;
         canvas.height = layout.view.h;
-        draw_touch_controls(canvas.getContext('2d')!, layout, held);
-    }, [layout, held]);
+        draw_touch_controls(canvas.getContext('2d')!, layout, held, muted);
+    }, [layout, held, muted]);
     return (
         <canvas
             ref={ref}

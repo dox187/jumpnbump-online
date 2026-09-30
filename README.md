@@ -169,15 +169,18 @@ on real devices, so expect rough edges.
 
 - The menu and game share a 400x256 screen, preserving the original proportions without internal black bars.
   It uses the largest size that fits alongside usable touch controls, with a plain black background.
-- Phones and tablets have translucent pixel buttons for left, right, jump, ESC and fullscreen. The layout
-  compares side columns and bottom rows, choosing whichever leaves more room for the game. On very small
-  screens it can put ESC and fullscreen beside the game and the movement buttons below. Computers show no
-  touch controls.
+- Phones and tablets have translucent pixel buttons. ESC stays in the upper-left corner and fullscreen in
+  the upper-right. Left/right sit together under the left thumb, with jump under the right thumb; the movement
+  row is lifted away from the bottom edge. The layout maximizes the game within these grip margins.
+- The music-note and speaker buttons toggle music and sound effects independently, including during a match.
+  A slash marks a muted channel. These preferences are saved and also apply to local play.
 - Buttons never cover the game or intercept touches inside it. Their targets stay at least 48 CSS pixels
-  across, with larger movement keys when spare space allows. Notches and home indicators leave safe margins.
+  across, with larger movement keys. Both the game and controls respect the browser's cutout and home-indicator
+  insets, which are refreshed on rotation, fullscreen changes and changes to the safe area itself.
 - All button outlines and icons share the same square pixel grid, including when pressed. With touch controls
   disabled, the game uses the entire available viewport while keeping its original aspect ratio.
 - The touch buttons can be turned off under **OPTIONS**; a keyboard or a gamepad works alongside them.
+  Computers show no touch controls.
 - Music needs an HTTPS address, and some browsers only offer gamepads to HTTPS pages.
 
 ## How the netcode works

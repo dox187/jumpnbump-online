@@ -1219,7 +1219,8 @@ export function init_program(canvas: HTMLCanvasElement, datafile: ArrayBuffer, p
 
     dj_init();
 
-    if (!main_info.no_sound) {
+    // Load audio even when muted: the in-game switches can enable it without restarting the level.
+    {
         dj_load_mod('jump.mod', MOD.MENU);
         dj_load_mod('bump.mod', MOD.GAME);
         dj_load_mod('scores.mod', MOD.SCORES);

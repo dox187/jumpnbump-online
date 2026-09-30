@@ -20,6 +20,8 @@ export default function Local() {
     });
     const { route } = useLocation();
     const [settings, , loaded] = useOnlineSettings();
+    const settingsRef = useRef(settings);
+    settingsRef.current = settings;
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [running, setRunning] = useState(false);
     const [failed, setFailed] = useState(false);
@@ -45,6 +47,7 @@ export default function Local() {
             .then(([dat]) => {
                 if (left || !canvasRef.current) return;
                 engine = new Engine(canvasRef.current);
+                const settings = settingsRef.current;
                 engine.init({
                     dat,
                     nosound: settings.muteMusic && settings.muteEffects,

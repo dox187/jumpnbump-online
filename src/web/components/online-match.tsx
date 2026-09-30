@@ -34,6 +34,8 @@ export default function OnlineMatch({
 }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const gameRef = useRef<OnlineGame | null>(null);
+    const settingsRef = useRef(settings);
+    settingsRef.current = settings;
     const hostRef = useRef(isHost);
     const escArmedUntil = useRef(0);
     const [phase, setPhase] = useState<OnlineGamePhase>('loading');
@@ -90,6 +92,7 @@ export default function OnlineMatch({
         ])
             .then(([module, dat]) => {
                 if (cancelled || !canvasRef.current) return;
+                const settings = settingsRef.current;
                 game = new module.OnlineGame({
                     canvas: canvasRef.current,
                     dat,

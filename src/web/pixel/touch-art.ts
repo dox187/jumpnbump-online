@@ -2,6 +2,31 @@
 import type { ButtonId, Rect, ShellLayout } from './touch-layout';
 
 const ICONS: Record<ButtonId, string[]> = {
+    music: [
+        '....#########',
+        '....#########',
+        '....#.......#',
+        '....#.......#',
+        '....#.......#',
+        '....#.......#',
+        '....#.......#',
+        '.####....####',
+        '#####...#####',
+        '.###.....###.',
+    ],
+    effects: [
+        '.....#.......',
+        '....##....#..',
+        '...###.....#.',
+        '######..#...#',
+        '######...#..#',
+        '######...#..#',
+        '######...#..#',
+        '######..#...#',
+        '...###.....#.',
+        '....##....#..',
+        '.....#.......',
+    ],
     left: [
         '....##.....',
         '...###.....',
@@ -62,7 +87,12 @@ function inside(x: number, y: number, size: number) {
     return dx + dy >= 4;
 }
 
-export function draw_touch_controls(context: CanvasRenderingContext2D, layout: ShellLayout, held: Set<ButtonId>) {
+export function draw_touch_controls(
+    context: CanvasRenderingContext2D,
+    layout: ShellLayout,
+    held: Set<ButtonId>,
+    muted: Set<ButtonId>
+) {
     context.clearRect(0, 0, layout.view.w, layout.view.h);
     for (const [id, rect] of Object.entries(layout.buttons) as [ButtonId, Rect][]) {
         const pressed = held.has(id);
@@ -85,5 +115,13 @@ export function draw_touch_controls(context: CanvasRenderingContext2D, layout: S
         context.fillStyle = `rgba(255,255,255,${pressed ? 1 : 0.7})`;
         for (let y = 0; y < icon.length; y++)
             for (let x = 0; x < icon[y].length; x++) if (icon[y][x] === '#') context.fillRect(ox + x, oy + y, 1, 1);
+        if (muted.has(id)) {
+            // Clear a one-pixel halo so the mute slash remains legible over either icon.
+            const sx = rect.x + Math.floor((rect.w - 13) / 2),
+                sy = rect.y + Math.floor((rect.h - 13) / 2);
+            for (let i = 0; i < 13; i++) context.clearRect(sx - 1 + i, sy + 11 - i, 3, 3);
+            context.fillStyle = 'rgba(255,255,255,0.9)';
+            for (let i = 0; i < 13; i++) context.fillRect(sx + i, sy + 12 - i, 1, 1);
+        }
     }
 }

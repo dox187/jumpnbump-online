@@ -32,11 +32,37 @@ const limitToWebSafeSampleRate = (sampleRate: number) =>
  * played (each jump, splash and death) and never closed them; browsers allow only a limited number.
  */
 let sfx_context: AudioContext | null = null;
+let sfx_master: GainNode | null = null;
+const track_volumes = new WeakMap<Mod, number>();
+
+function set_track_volume(track: Mod, volume: number) {
+    track.setVolume(volume);
+    // The player library ramps zero through 0.01. Cancel that ramp for a truly silent mute,
+    // including while the game keeps updating its fade volume every frame.
+    if (volume === 0 && track.gainNode) {
+        track.gainNode.gain.cancelScheduledValues(track.context.currentTime);
+        track.gainNode.gain.setValueAtTime(0, track.context.currentTime);
+    }
+}
+
+/** Apply saved audio switches immediately, including looping effects and songs already playing. */
+export function dj_set_audio_preferences(mute_music: boolean, mute_effects: boolean) {
+    context.info.no_music = mute_music;
+    context.info.music_no_sound = mute_effects;
+    context.info.no_sound = mute_music && mute_effects;
+    if (sfx_master) sfx_master.gain.value = mute_effects ? 0 : 1;
+    for (const track of tracks) {
+        if (track) set_track_volume(track, mute_music ? 0 : (track_volumes.get(track) ?? 1));
+    }
+}
 
 function sfx_audio(): AudioContext | null {
     if (!sfx_context) {
         try {
             sfx_context = new AudioContext();
+            sfx_master = sfx_context.createGain();
+            sfx_master.gain.value = context.info.music_no_sound || context.info.no_sound ? 0 : 1;
+            sfx_master.connect(sfx_context.destination);
         } catch {
             return null;
         }
@@ -78,10 +104,6 @@ export function dj_play_sfx(
     delay: number,
     channel: number
 ) {
-    if (context.info.music_no_sound || context.info.no_sound) {
-        return;
-    }
-
     if (!sounds[sfx_num]) {
         console.warn(`Sound ${sfx_num} not loaded`);
         return;
@@ -97,7 +119,7 @@ export function dj_play_sfx(
     source.playbackRate.value = Math.max(0.05, freq / rate);
     const gain = audio.createGain();
     gain.gain.value = volume / MAX_VOLUME;
-    source.connect(gain).connect(audio.destination);
+    source.connect(gain).connect(sfx_master!);
     const voice: Voice = { source, gain };
     source.onended = () => {
         source.disconnect();
@@ -158,20 +180,23 @@ function stop_track(track: Mod) {
 }
 
 export function dj_start_mod() {
-    if (context.info.no_sound || context.info.no_music) {
-        return;
-    }
-
     const track = getCurrentTrack();
-    if (track === null) {
+    if (track === null) return;
+    if (wanted.get(track)) {
+        if (track.context.state === 'suspended') track.context.resume().catch(() => {});
         return;
     }
+    // Keep the song's position while muted, so toggling music does not restart it.
+    set_track_volume(track, context.info.no_music || context.info.no_sound ? 0 : (track_volumes.get(track) ?? 1));
     wanted.set(track, true);
     track.play().then(
         () => {
             if (!wanted.get(track)) stop_track(track);
         },
-        (e: unknown) => console.info('Music could not start:', e)
+        (e: unknown) => {
+            wanted.set(track, false);
+            console.info('Music could not start:', e);
+        }
     );
 }
 
@@ -180,6 +205,10 @@ export function dj_stop_mod() {
 }
 
 export function dj_init() {
+    dj_set_audio_preferences(
+        context.info.no_music || context.info.no_sound,
+        context.info.music_no_sound || context.info.no_sound
+    );
     window.addEventListener('touchstart', handleUserGesture);
     window.addEventListener('mousedown', handleUserGesture);
     window.addEventListener('keydown', handleKeyboardUserGesture);
@@ -204,15 +233,12 @@ export function dj_ready_mod(mod_type: MOD) {
 }
 
 export function dj_set_mod_volume(volume: number) {
-    if (context.info.no_sound) {
-        return;
-    }
-
     const track = getCurrentTrack();
     if (track === null) {
         return;
     }
-    track.setVolume(volume / MAX_VOLUME);
+    track_volumes.set(track, volume / MAX_VOLUME);
+    set_track_volume(track, context.info.no_music || context.info.no_sound ? 0 : volume / MAX_VOLUME);
 }
 
 export function dj_set_sfx_volume(volume: number) {}
