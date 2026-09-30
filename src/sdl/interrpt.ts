@@ -2,6 +2,7 @@ import { KEY } from '../constants';
 import { poll_events, get_mouse_buttons } from './events';
 import { toggle_fullscreen } from './gfx';
 import ctx from '../context';
+import { GamepadPresses, PAD_BACK, PAD_START } from '../extra-input';
 
 let lastTick = 0;
 const TICK_LENGTH = 1000 / 60;
@@ -11,6 +12,10 @@ const keyb: Record<string, boolean> = {};
 const went_down = new Set<string>();
 
 export const last_keys: string[] = new Array(50);
+
+/** Gamepad buttons, read once per intr_sysupdate; Start or Back work as the Escape key. */
+const gamepad_presses = new GamepadPresses();
+let gamepad_escape = false;
 
 const AI_HOTKEYS = [KEY.ONE, KEY.TWO, KEY.THREE, KEY.FOUR];
 let ai_hotkeys_enabled = true;
@@ -32,11 +37,16 @@ function getTicks() {
 }
 
 export function key_pressed(key: string) {
-    return keyb[key];
+    return keyb[key] || (key === KEY.ESCAPE && gamepad_escape);
 }
 
 export function key_went_down(key: string) {
     return went_down.has(key);
+}
+
+/** True when one of the standard gamepad `buttons` went down during the latest intr_sysupdate. */
+export function gamepad_went_down(...buttons: number[]) {
+    return gamepad_presses.went_down(...buttons);
 }
 
 export function mouse_button_pressed(button: number): boolean {
@@ -116,6 +126,10 @@ export function intr_sysupdate(): number {
                 break;
         }
     }
+
+    gamepad_presses.poll();
+    gamepad_escape = gamepad_presses.held_down(PAD_START, PAD_BACK);
+    if (gamepad_presses.went_down(PAD_START, PAD_BACK)) went_down.add(KEY.ESCAPE);
 
     const nextTick = lastTick + TICK_LENGTH;
     const now = getTicks();

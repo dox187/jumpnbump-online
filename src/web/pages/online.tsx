@@ -42,8 +42,8 @@ import {
 import { TextColor, text_width } from '../pixel/font';
 import { BUNNY_SPOTS, RemoteHop, SCENE_X, SCENE_Y, Scene, SceneBunny, SceneOwnBunny } from '../pixel/scene';
 import { InputTracker, is_text_field, read_input_mask, track_input } from '../pixel/hop';
-import { has_keyboard_focus } from '../pixel/keyboard-nav';
-import { extra_mask } from '../../extra-input';
+import { has_keyboard_focus, lend_gamepads } from '../pixel/keyboard-nav';
+import { extra_mask, set_configured_gamepad } from '../../extra-input';
 import '../pixel/pixel.css';
 
 const OnlineMatch = lazy(() => import('../components/online-match'));
@@ -491,7 +491,7 @@ function OptionsDialog({
                         {selectedGamepad && <Button label="SET UP" onClick={() => setConfiguring(selectedGamepad)} />}
                     </div>
                     <Paragraph
-                        text="Plug in a gamepad and press one of its buttons to add it here."
+                        text="Most gamepads just work; pick one here to change its buttons."
                         width={234}
                         color="dim"
                     />
@@ -891,9 +891,12 @@ function useOwnHop(slot: number | null, device: GameInputDevice): SceneOwnBunny 
         if (!active) return;
         const tracking = track_input();
         tracker.current = tracking;
+        // Gamepads steer the bunny too, and work the menu only once it has the focus (Start or Tab)
+        const end_lending = lend_gamepads(() => !has_keyboard_focus() && !is_text_field(document.activeElement));
         return () => {
             tracking.dispose();
             tracker.current = null;
+            end_lending();
         };
     }, [active]);
 
@@ -921,6 +924,11 @@ export default function Online() {
     const state = useNet();
     const [settings, updateSettings, loaded] = useOnlineSettings();
     const gamepads = useGamepads();
+    // Every gamepad works without setup, except the one picked as the control: that one keeps its own buttons
+    useEffect(() => {
+        set_configured_gamepad(settings.control);
+        return () => set_configured_gamepad(null);
+    }, [settings.control]);
     const [assets, setAssets] = useState<GameAssets | null>(game_assets());
     const [assetsFailed, setAssetsFailed] = useState(false);
     const [dialog, setDialog] = useState<'name' | 'create' | 'options' | 'about' | null>(null);

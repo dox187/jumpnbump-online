@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'preact/hooks';
 import { Button, Dialog, Paragraph, Text } from '../pixel/components';
+import { useGamepadCapture } from '../pixel/keyboard-nav';
 
 type ConfigPhase = 'left' | 'right' | 'jump' | 'confirm';
 
@@ -38,12 +39,17 @@ export function ConfigureController({ gamepad, onComplete, onCancel }: Configure
 
     const phaseIndex = ['left', 'right', 'jump', 'confirm'].indexOf(phase);
 
+    // The gamepad works the menu again only on the last page (to save)
+    useGamepadCapture(phase !== 'confirm');
+
     // Listen for gamepad button presses
     useEffect(() => {
         if (!listening || phase === 'confirm' || cooldown) return;
 
         let frameId: number;
-        let lastPressedButton: string | null = null;
+        // A button still held (e.g. the A press that opened this dialog) counts only after it is released
+        const held = navigator.getGamepads()[gamepad.index]?.buttons.findIndex((button) => button.pressed) ?? -1;
+        let lastPressedButton: string | null = held >= 0 ? `button_${held}` : null;
 
         const checkButtons = () => {
             const freshGamepad = navigator.getGamepads()[gamepad.index];
