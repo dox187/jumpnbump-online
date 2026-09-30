@@ -39,7 +39,9 @@ Features of the online mode:
 - A 3-2-1 countdown at the start, the players' names on the level's side panel, the last death replayed in slow
   motion at the end, then the classic score screen with the names; the result table stays available in the room
   under **LAST MATCH**.
-- All menus work with the keyboard (arrow keys, Enter, Escape) as well as the mouse.
+- All menus work with the keyboard (arrow keys, Enter, Escape) as well as the mouse. Gamepads work without any
+  setup, in the menus and in the game.
+- Phones and tablets (**beta**): touch buttons in a wooden handheld frame, see below.
 - Local settings per player: controls, mute music or sound effects, no gore, no flies.
 
 The original local game (up to four players on one keyboard, with computer players) is still available: **Local
@@ -152,6 +154,17 @@ The online pages are drawn with the game's own graphics: the menu forest, the bi
 accents and a few missing symbols) and the bunny sprites, on an integer-scaled pixel grid.
 
 Cheats and the 1-4 computer-player keys are disabled online, and each browser controls one bunny.
+
+## Phones and tablets (beta)
+
+The mobile version is a **beta**: it works, but it has seen far less testing than the desktop version, especially
+on real devices, so expect rough edges.
+
+- On phones and tablets the screen sits in a pixel-art handheld console carved from wood. Held upright, the touch
+  buttons (left, right, jump, BACK for ESC and FULL for fullscreen) are below the screen; in landscape they are on
+  both sides. They never cover the screen. Computers never show them.
+- The touch buttons can be turned off under **OPTIONS**; a keyboard or a gamepad works alongside them.
+- Music needs an HTTPS address, and some browsers only offer gamepads to HTTPS pages.
 
 ## How the netcode works
 
