@@ -5,7 +5,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY . .
 # Where the Source links point; pass --build-arg VITE_SOURCE_URL=<your repository> when you serve changed code
-ARG VITE_SOURCE_URL
+ARG VITE_SOURCE_URL=
 RUN npm run build
 
 FROM docker.io/library/node:24-slim
