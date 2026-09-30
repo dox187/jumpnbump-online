@@ -1,6 +1,6 @@
 /**
  * The animated menu scene behind the lobby: the original menu background, idle bunnies that hop now and
- * then, butterflies and the fly swarm, drawn at 60 Hz on a 480x288 canvas.
+ * then, butterflies and the fly swarm, drawn at 60 Hz on a canvas the size of the stage.
  *
  * In a room the players' bunnies hop around instead: your own one with the menu physics (HopBunny), the
  * others from position samples relayed over the network, each with its name tag above it.
@@ -14,7 +14,7 @@ import { TextColor, fit_text, render_text } from './font';
 import { HOP_MAX_X, HOP_SPOTS, HopBunny } from './hop';
 
 /** Where the 400x256 menu screen sits on the stage. */
-export const SCENE_X = 40;
+export const SCENE_X = 0;
 export const SCENE_Y = 16;
 /** The logo sits in the black header above the forest; lift only that strip to make room for the host. */
 const MENU_HEADER_HEIGHT = 63;

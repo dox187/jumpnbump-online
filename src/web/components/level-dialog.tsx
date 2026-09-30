@@ -159,7 +159,7 @@ export function LevelDialog({
     }, []);
 
     return (
-        <Dialog title="CHOOSE A LEVEL" onClose={onClose} width={440}>
+        <Dialog title="CHOOSE A LEVEL" onClose={onClose} width={360}>
             <div className="gp-col">
                 <div className="gp-row justify-between">
                     <TextInput

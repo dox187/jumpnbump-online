@@ -34,6 +34,7 @@ import {
     Icon,
     Panel,
     Paragraph,
+    STAGE_WIDTH,
     Stage,
     Text,
     TextInput,
@@ -66,9 +67,10 @@ const COPIED_TOAST_MS = 500;
 const seen_results = new Map<string, string>();
 const ROOMS_PER_PAGE = 8;
 /** Where the bunnies hop about while you are in the lobby (right of the room list). */
-const LOBBY_SPOTS = [286, 326, 366, 406].map((x) => ({ x, y: SCENE_Y + 160 }));
+const LOBBY_SPOTS = [246, 286, 326, 366].map((x) => ({ x: SCENE_X + x, y: SCENE_Y + 160 }));
 /** Left edge of the room's level panel on the stage; the bunnies hop only left of it. */
-const LEVEL_PANEL_X = 342;
+const LEVEL_PANEL_WIDTH = 118;
+const LEVEL_PANEL_X = STAGE_WIDTH - LEVEL_PANEL_WIDTH - 2;
 const ROOM_HOP_MAX_X = LEVEL_PANEL_X - SCENE_X - 16 - 2;
 
 function levelFor(datFile: string): Level {
@@ -380,7 +382,7 @@ function Lobby({
 
     return (
         <>
-            <At x={34} y={66}>
+            <At x={4} y={74}>
                 <Panel className="gp-col" style={{ width: gp(218), height: gp(146) }}>
                     <div className="gp-row justify-between">
                         <Text text="ROOMS" color="gold" />
@@ -728,14 +730,14 @@ function Room({
 
     return (
         <>
-            <At x={6} y={6}>
+            <At x={4} y={4}>
                 <Panel className="gp-row" style={{ gap: gp(3) }}>
                     {room.locked && <Icon name="lock" />}
                     <Text text={room.name} color="gold" maxWidth={140} />
                 </Panel>
             </At>
             {watchers.length > 0 && (
-                <At x={8} y={34}>
+                <At x={4} y={30}>
                     <div className="gp-col" style={{ gap: 0 }}>
                         <Text text="Watching:" color="dim" shadow />
                         {watchers.slice(0, 3).map((w) => (
@@ -797,13 +799,13 @@ function Room({
                 );
             })}
 
-            <At x={LEVEL_PANEL_X} y={6}>
-                <Panel className="gp-col" style={{ width: gp(132), alignItems: 'center' }}>
+            <At x={LEVEL_PANEL_X} y={4}>
+                <Panel className="gp-col" style={{ width: gp(LEVEL_PANEL_WIDTH), alignItems: 'center' }}>
                     <Text text="LEVEL" color="gold" />
-                    <Thumbnail level={level} width={100} height={64} />
-                    <Paragraph text={level.name} width={118} center />
-                    {isHost && canPick && <Button label="CHANGE" onClick={() => setShowLevels(true)} width={118} />}
-                    <div className="gp-row justify-between" style={{ width: gp(118) }}>
+                    <Thumbnail level={level} width={88} height={56} />
+                    <Paragraph text={level.name} width={100} center />
+                    {isHost && canPick && <Button label="CHANGE" onClick={() => setShowLevels(true)} width={100} />}
+                    <div className="gp-row justify-between" style={{ width: gp(100) }}>
                         <Text text="First to" color="wood" />
                         <Cycler
                             label="Score limit"
@@ -821,7 +823,7 @@ function Room({
                             disabled={!enough}
                             title={enough ? undefined : 'A match needs at least two bunnies.'}
                             onClick={() => net.send({ t: 'start' })}
-                            width={118}
+                            width={100}
                         />
                     )}
                 </Panel>
@@ -1054,7 +1056,7 @@ export default function Online() {
 
             {!room && online && (
                 <>
-                    <At x={6} y={6}>
+                    <At x={4} y={4}>
                         <div className="gp-row" style={{ gap: gp(3) }}>
                             <Text text="You:" color="dim" shadow />
                             <Button
@@ -1064,7 +1066,7 @@ export default function Online() {
                             />
                         </div>
                     </At>
-                    <At right={6} y={8}>
+                    <At right={4} y={6}>
                         <Text text={`Online: ${state.online}`} color="green" shadow />
                     </At>
                 </>
@@ -1086,7 +1088,7 @@ export default function Online() {
             )}
 
             {loaded && settings.name && !online && (
-                <At x={140} y={110}>
+                <At x={100} y={110}>
                     <Panel className="gp-col" style={{ width: gp(200), alignItems: 'center' }}>
                         <Text
                             text={state.status === 'offline' ? 'SERVER NOT REACHABLE' : 'CONNECTING...'}

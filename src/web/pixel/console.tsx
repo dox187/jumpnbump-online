@@ -1,6 +1,6 @@
 /**
- * The frame around the game screen. The screen is always 4:3, like the monitors the game was made for: the
- * 400x256 game fills it with slightly tall pixels, as it did on a CRT, and the menu uses the same pixel shape.
+ * The frame around the game screen. The screen is always 4:3, like the monitors the game was made for, with
+ * square pixels: the 400x300 menu fills it, the 400x256 game fills its width with a thin band above and below.
  *
  * On a computer the screen sits on black. On phones and tablets it is set into a handheld console carved from
  * wood (a pixel-art Game Boy that fills the whole display) when held upright, and in landscape when the touch
@@ -12,7 +12,9 @@ import { touch_input } from '../../extra-input';
 import { is_mobile_device, touch_enabled, useOnlineSettings } from '../hooks/online-settings';
 import { font_ready, layout_text } from './font';
 
-/** The screen of the handheld, in body pixels: 4:3. */
+/** The 4:3 screen in game pixels, and the screen of the handheld in body pixels. */
+const GAME_SCREEN_W = 400;
+const GAME_SCREEN_H = 300;
 const SCREEN_W = 480;
 const SCREEN_H = 360;
 
@@ -58,12 +60,6 @@ function safe_insets(): Insets {
     return insets;
 }
 
-/** Rounds CSS pixels down to whole device pixels. */
-function device_floor(css: number) {
-    const dpr = window.devicePixelRatio || 1;
-    return Math.floor(css * dpr) / dpr;
-}
-
 const round = Math.round;
 const NO_FRAME = { body_scale: 1, view: { w: 0, h: 0 }, screen: { x: 0, y: 0, w: 0, h: 0 }, logo: null, speaker: null };
 
@@ -76,10 +72,14 @@ function compute_layout(touch: boolean): ShellLayout {
     const mobile = is_mobile_device();
     const portrait = H > W;
     if (!mobile || (!portrait && !touch)) {
-        // The largest 4:3 screen that fits
-        const w = device_floor(Math.min(W, (H * 4) / 3));
-        const h = device_floor((w * 3) / 4);
-        return { mode: 'plain', box: { x: (W - w) / 2, y: (H - h) / 2, w, h }, buttons: {}, ...NO_FRAME };
+        // The largest 4:3 screen that fits with a whole number of device pixels per game pixel, which keeps
+        // pixel art crisp; windows too small for that get a fractional scale
+        const dpr = window.devicePixelRatio || 1;
+        const fit = Math.min((W * dpr) / GAME_SCREEN_W, (H * dpr) / GAME_SCREEN_H);
+        const n = fit >= 1 ? Math.floor(fit) : fit;
+        const w = (GAME_SCREEN_W * n) / dpr;
+        const h = (GAME_SCREEN_H * n) / dpr;
+        return { mode: 'plain', box: { x: round((W - w) / 2), y: round((H - h) / 2), w, h }, buttons: {}, ...NO_FRAME };
     }
 
     const safe = safe_insets();
@@ -764,11 +764,10 @@ export function Shell({
         element.addEventListener('contextmenu', block_context_menu);
         return () => element.removeEventListener('contextmenu', block_context_menu);
     }, [mounted, layout.mode]);
+    // Square pixels: the content as large as the screen allows, centred (the game leaves a band above and below)
     const content = useMemo(() => {
-        const px = layout.box.w / width;
-        // Game pixels are drawn a little taller than wide, so that the content fills the 4:3 screen
-        const stretch = layout.box.h / height / px;
-        return { px, stretch };
+        const px = Math.min(layout.box.w / width, layout.box.h / height);
+        return { px, x: (layout.box.w - width * px) / 2, y: (layout.box.h - height * px) / 2 };
     }, [layout.box.w, layout.box.h, width, height]);
     if (!mounted) return <div className="gp-root" />;
 
@@ -778,9 +777,10 @@ export function Shell({
             className="gp-stage"
             style={{
                 ...style(content.px),
+                left: `${content.x}px`,
+                top: `${content.y}px`,
                 width: `${width * content.px}px`,
                 height: `${height * content.px}px`,
-                transform: `scaleY(${content.stretch})`,
             }}
         >
             {children}

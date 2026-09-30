@@ -23,7 +23,7 @@ export const HOP_SPOTS: readonly { x: number; y: number; direction: number }[] =
     { x: 30, y: 160, direction: 0 },
     { x: 110, y: 162, direction: 0 },
     { x: 186, y: 142, direction: 1 },
-    { x: 266, y: 166, direction: 1 },
+    { x: 248, y: 166, direction: 1 },
 ];
 
 /** Optional cosmetic hooks at the places where the menu made smoke puffs and played the jump sound. */
