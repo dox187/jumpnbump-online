@@ -3,7 +3,7 @@ import { lazy } from 'preact-iso';
 import { PageMeta, usePageMeta } from '../hooks/page-meta';
 import { useNet } from '../hooks/net';
 import { useGamepads } from '../hooks/gamepads';
-import { OnlineSettings, useOnlineSettings } from '../hooks/online-settings';
+import { OnlineSettings, touch_enabled, useOnlineSettings } from '../hooks/online-settings';
 import { ConfigureController } from '../components/configure-controller';
 import { LevelDialog, Thumbnail } from '../components/level-dialog';
 import { MAPPINGS, getFriendlyGamepadName, getGamepadId, getKnownGamepadDefaults } from '../controls';
@@ -42,7 +42,8 @@ import {
 import { TextColor, text_width } from '../pixel/font';
 import { BUNNY_SPOTS, RemoteHop, SCENE_X, SCENE_Y, Scene, SceneBunny, SceneOwnBunny } from '../pixel/scene';
 import { InputTracker, is_text_field, read_input_mask, track_input } from '../pixel/hop';
-import { has_keyboard_focus } from '../pixel/keyboard-nav';
+import { has_keyboard_focus, lend_gamepads } from '../pixel/keyboard-nav';
+import { extra_mask, set_configured_gamepad } from '../../extra-input';
 import '../pixel/pixel.css';
 
 const OnlineMatch = lazy(() => import('../components/online-match'));
@@ -490,7 +491,7 @@ function OptionsDialog({
                         {selectedGamepad && <Button label="SET UP" onClick={() => setConfiguring(selectedGamepad)} />}
                     </div>
                     <Paragraph
-                        text="Plug in a gamepad and press one of its buttons to add it here."
+                        text="Most gamepads just work; pick one here to change its buttons."
                         width={234}
                         color="dim"
                     />
@@ -514,6 +515,11 @@ function OptionsDialog({
                             label="No flies"
                             checked={settings.noFlies}
                             onChange={(noFlies) => updateSettings({ noFlies })}
+                        />
+                        <Checkbox
+                            label="Touch buttons"
+                            checked={touch_enabled(settings)}
+                            onChange={(touch) => updateSettings({ touch })}
                         />
                     </div>
                     {!musicAvailable && (
@@ -885,9 +891,12 @@ function useOwnHop(slot: number | null, device: GameInputDevice): SceneOwnBunny 
         if (!active) return;
         const tracking = track_input();
         tracker.current = tracking;
+        // Gamepads steer the bunny too, and work the menu only once it has the focus (Start or Tab)
+        const end_lending = lend_gamepads(() => !has_keyboard_focus() && !is_text_field(document.activeElement));
         return () => {
             tracking.dispose();
             tracker.current = null;
+            end_lending();
         };
     }, [active]);
 
@@ -901,7 +910,7 @@ function useOwnHop(slot: number | null, device: GameInputDevice): SceneOwnBunny 
                 if (!held || has_keyboard_focus() || is_text_field(document.activeElement)) return 0;
                 // Some browsers only offer gamepads to secure (HTTPS) pages
                 const gamepads = navigator.getGamepads?.() ?? [];
-                return read_input_mask(deviceRef.current, held.keys, held.mouse_buttons, gamepads);
+                return read_input_mask(deviceRef.current, held.keys, held.mouse_buttons, gamepads) | extra_mask();
             },
             on_state: (sample) => net.send({ t: 'hop', s: sample }),
             // The level panel covers the right end of the forest
@@ -915,6 +924,11 @@ export default function Online() {
     const state = useNet();
     const [settings, updateSettings, loaded] = useOnlineSettings();
     const gamepads = useGamepads();
+    // Every gamepad works without setup, except the one picked as the control: that one keeps its own buttons
+    useEffect(() => {
+        set_configured_gamepad(settings.control);
+        return () => set_configured_gamepad(null);
+    }, [settings.control]);
     const [assets, setAssets] = useState<GameAssets | null>(game_assets());
     const [assetsFailed, setAssetsFailed] = useState(false);
     const [dialog, setDialog] = useState<'name' | 'create' | 'options' | 'about' | null>(null);

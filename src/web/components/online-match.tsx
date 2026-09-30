@@ -4,7 +4,8 @@ import { BUNNY_NAMES, MatchInfo } from '../../net/protocol';
 import type { GameInputDevice } from '../../inputs';
 import type { Countdown, OnlineGame, OnlineGamePhase } from '../../online/online-game';
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../../constants';
-import { Button, Panel, Text, gp, pixel_variables, usePixelScale } from '../pixel/components';
+import { Button, Panel, Text, gp, pixel_variables } from '../pixel/components';
+import { Shell } from '../pixel/console';
 import '../pixel/pixel.css';
 
 export type MatchSettings = {
@@ -146,127 +147,124 @@ export default function OnlineMatch({
         };
     }, []);
 
-    const scale = usePixelScale(SCREEN_WIDTH, SCREEN_HEIGHT);
     const waiting = phase === 'loading' || phase === 'waiting' || failed !== null;
     const showLegend = phase === 'playing' && ((countdown !== null && countdown > 0) || tabHeld);
     const myBunny = slot >= 0 ? BUNNY_NAMES[slot] : null;
     const escHint = spectating ? 'back' : isHost ? 'end match' : 'leave';
 
     return (
-        <div className="gp-root" style={pixel_variables(scale)}>
-            <div className="gp-stage" style={{ width: gp(SCREEN_WIDTH), height: gp(SCREEN_HEIGHT) }}>
-                <canvas
-                    ref={canvasRef}
+        <Shell width={SCREEN_WIDTH} height={SCREEN_HEIGHT} style={pixel_variables}>
+            <canvas
+                ref={canvasRef}
+                className="gp-abs"
+                style={{
+                    left: 0,
+                    top: 0,
+                    width: gp(SCREEN_WIDTH),
+                    height: gp(SCREEN_HEIGHT),
+                    visibility: waiting ? 'hidden' : 'visible',
+                }}
+            />
+
+            {showLegend && (
+                <div
                     className="gp-abs"
-                    style={{
-                        left: 0,
-                        top: 0,
-                        width: gp(SCREEN_WIDTH),
-                        height: gp(SCREEN_HEIGHT),
-                        visibility: waiting ? 'hidden' : 'visible',
-                    }}
-                />
-
-                {showLegend && (
-                    <div
-                        className="gp-abs"
-                        style={{ left: 0, right: gp(48), top: gp(8), display: 'flex', justifyContent: 'center' }}
-                    >
-                        <Panel className="gp-col" style={{ alignItems: 'center', gap: 0 }}>
-                            {myBunny && <Text text={`You are ${myBunny.toUpperCase()}`} color="gold" />}
-                            {spectating && <Text text="You are watching" color="gold" />}
-                            <div className="gp-row" style={{ gap: gp(8) }}>
-                                {match.slots.map((s, i) =>
-                                    s ? (
-                                        <Text
-                                            key={i}
-                                            text={`${BUNNY_NAMES[i]}: ${s.name}`}
-                                            color={s.id === myId ? 'gold' : 'white'}
-                                            maxWidth={90}
-                                        />
-                                    ) : null
-                                )}
-                            </div>
-                            <Text
-                                text={`ESC${spectating ? '' : ' twice'}: ${escHint} - TAB: players - ping ${ping ?? '-'} ms`}
-                                color="dim"
-                                maxWidth={300}
-                            />
-                        </Panel>
-                    </div>
-                )}
-
-                {phase === 'playing' && countdown !== null && (
-                    <div
-                        className="gp-abs pointer-events-none"
-                        style={{ left: 0, right: gp(48), top: gp(96), display: 'flex', justifyContent: 'center' }}
-                    >
+                    style={{ left: 0, right: gp(48), top: gp(8), display: 'flex', justifyContent: 'center' }}
+                >
+                    <Panel className="gp-col" style={{ alignItems: 'center', gap: 0 }}>
+                        {myBunny && <Text text={`You are ${myBunny.toUpperCase()}`} color="gold" />}
+                        {spectating && <Text text="You are watching" color="gold" />}
+                        <div className="gp-row" style={{ gap: gp(8) }}>
+                            {match.slots.map((s, i) =>
+                                s ? (
+                                    <Text
+                                        key={i}
+                                        text={`${BUNNY_NAMES[i]}: ${s.name}`}
+                                        color={s.id === myId ? 'gold' : 'white'}
+                                        maxWidth={90}
+                                    />
+                                ) : null
+                            )}
+                        </div>
                         <Text
-                            key={countdown}
-                            text={countdown > 0 ? String(countdown) : 'GO!'}
-                            color={countdown > 0 ? 'gold' : 'green'}
-                            size={4}
-                            shadow
-                            className="gp-pop"
+                            text={`ESC${spectating ? '' : ' twice'}: ${escHint} - TAB: players - ping ${ping ?? '-'} ms`}
+                            color="dim"
+                            maxWidth={300}
                         />
-                    </div>
-                )}
+                    </Panel>
+                </div>
+            )}
 
-                {phase === 'replay' && (
-                    <>
-                        <div className="gp-abs gp-blink pointer-events-none" style={{ left: gp(6), top: gp(4) }}>
-                            <Text text="REPLAY" color="red" size={2} shadow />
-                        </div>
-                        <div className="gp-abs" style={{ right: gp(54), bottom: gp(4) }}>
-                            <Button label="SKIP" onClick={() => gameRef.current?.skip_replay()} />
-                        </div>
-                    </>
-                )}
+            {phase === 'playing' && countdown !== null && (
+                <div
+                    className="gp-abs pointer-events-none"
+                    style={{ left: 0, right: gp(48), top: gp(96), display: 'flex', justifyContent: 'center' }}
+                >
+                    <Text
+                        key={countdown}
+                        text={countdown > 0 ? String(countdown) : 'GO!'}
+                        color={countdown > 0 ? 'gold' : 'green'}
+                        size={4}
+                        shadow
+                        className="gp-pop"
+                    />
+                </div>
+            )}
 
-                {(notice || (stalled && phase === 'playing')) && (
-                    <div
-                        className="gp-abs"
-                        style={{ left: 0, right: gp(48), top: gp(110), display: 'flex', justifyContent: 'center' }}
-                    >
-                        <Panel>
-                            <Text
-                                text={notice ?? 'Connection problem: waiting for the server...'}
-                                color={notice ? 'gold' : 'red'}
-                            />
-                        </Panel>
+            {phase === 'replay' && (
+                <>
+                    <div className="gp-abs gp-blink pointer-events-none" style={{ left: gp(6), top: gp(4) }}>
+                        <Text text="REPLAY" color="red" size={2} shadow />
                     </div>
-                )}
+                    <div className="gp-abs" style={{ right: gp(54), bottom: gp(4) }}>
+                        <Button label="SKIP" onClick={() => gameRef.current?.skip_replay()} />
+                    </div>
+                </>
+            )}
 
-                {waiting && (
-                    <div
-                        className="gp-abs"
-                        style={{ inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                        <Panel className="gp-col" style={{ alignItems: 'center', width: gp(220) }}>
-                            <Text
-                                text={
-                                    failed ??
-                                    (phase === 'loading' ? 'LOADING LEVEL...' : 'WAITING FOR THE OTHER BUNNIES...')
-                                }
-                                color={failed ? 'red' : 'gold'}
-                            />
-                            {myBunny && !failed && <Text text={`You play ${myBunny}.`} color="white" />}
-                            {spectating && !failed && <Text text="You are watching." color="white" />}
-                            {!failed && <Text text="SHIFT+F: fullscreen" color="dim" />}
-                            <Button
-                                label={isHost && !spectating && !failed ? 'CANCEL MATCH' : 'BACK TO THE ROOM'}
-                                onClick={quit}
-                            />
-                        </Panel>
-                    </div>
-                )}
+            {(notice || (stalled && phase === 'playing')) && (
+                <div
+                    className="gp-abs"
+                    style={{ left: 0, right: gp(48), top: gp(110), display: 'flex', justifyContent: 'center' }}
+                >
+                    <Panel>
+                        <Text
+                            text={notice ?? 'Connection problem: waiting for the server...'}
+                            color={notice ? 'gold' : 'red'}
+                        />
+                    </Panel>
+                </div>
+            )}
 
-                {phase === 'scores' && (
-                    <div className="gp-abs" style={{ right: gp(6), bottom: gp(4) }}>
-                        <Button label="CONTINUE" primary onClick={() => gameRef.current?.dismiss_scores()} />
-                    </div>
-                )}
-            </div>
-        </div>
+            {waiting && (
+                <div
+                    className="gp-abs"
+                    style={{ inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                    <Panel className="gp-col" style={{ alignItems: 'center', width: gp(220) }}>
+                        <Text
+                            text={
+                                failed ??
+                                (phase === 'loading' ? 'LOADING LEVEL...' : 'WAITING FOR THE OTHER BUNNIES...')
+                            }
+                            color={failed ? 'red' : 'gold'}
+                        />
+                        {myBunny && !failed && <Text text={`You play ${myBunny}.`} color="white" />}
+                        {spectating && !failed && <Text text="You are watching." color="white" />}
+                        {!failed && <Text text="SHIFT+F: fullscreen" color="dim" />}
+                        <Button
+                            label={isHost && !spectating && !failed ? 'CANCEL MATCH' : 'BACK TO THE ROOM'}
+                            onClick={quit}
+                        />
+                    </Panel>
+                </div>
+            )}
+
+            {phase === 'scores' && (
+                <div className="gp-abs" style={{ right: gp(6), bottom: gp(4) }}>
+                    <Button label="CONTINUE" primary onClick={() => gameRef.current?.dismiss_scores()} />
+                </div>
+            )}
+        </Shell>
     );
 }

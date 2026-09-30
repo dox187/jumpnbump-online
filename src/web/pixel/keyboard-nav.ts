@@ -2,9 +2,26 @@
  * Game-style keyboard control of the pixel UI. The arrow keys move the focus to the nearest control in that
  * direction within the topmost layer (the last open dialog, otherwise the stage); Enter and Space activate the
  * focused control natively. Dialogs take the focus when they open and give it back when they close.
+ *
+ * Gamepads work the same menus (see the end of this file): the D-pad or left stick are the arrow keys, A is
+ * Enter, B or Back is Escape, and Start moves into the menu like Tab.
  */
 import type { RefObject } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
+import {
+    GamepadPresses,
+    PAD_A,
+    PAD_B,
+    PAD_BACK,
+    PAD_DOWN,
+    PAD_LEFT,
+    PAD_RIGHT,
+    PAD_START,
+    PAD_UP,
+    STICK_DEAD_ZONE,
+    pad_pressed,
+    standard_gamepads,
+} from '../../extra-input';
 
 /** What the arrow keys can move to (disabled controls and tabindex -1 are filtered out afterwards). */
 const CONTROLS =
@@ -20,6 +37,12 @@ const DIRECTIONS: Record<string, Direction> = {
     ArrowDown: 'down',
     ArrowLeft: 'left',
     ArrowRight: 'right',
+};
+const ARROW_KEYS: Record<Direction, string> = {
+    up: 'ArrowUp',
+    down: 'ArrowDown',
+    left: 'ArrowLeft',
+    right: 'ArrowRight',
 };
 
 /** The stages with keyboard navigation that are on the page right now. */
@@ -226,12 +249,12 @@ function handle_key(stage: HTMLElement, event: KeyboardEvent) {
  * Installs the arrow-key navigation for a stage. `skip` can claim keydown events for something else
  * (the navigation then ignores them entirely); it is read on every key, so it may change between renders.
  */
-export function useKeyboardNav(stage: RefObject<HTMLElement>, skip?: (event: KeyboardEvent) => boolean) {
+export function useKeyboardNav(element: HTMLElement | null, skip?: (event: KeyboardEvent) => boolean) {
     const skip_ref = useRef(skip);
     skip_ref.current = skip;
 
+    // The stage element changes when the frame around it switches layout (rotation, touch buttons on or off)
     useEffect(() => {
-        const element = stage.current;
         if (!element) return;
         stages.add(element);
         const handler = (event: KeyboardEvent) => {
@@ -240,11 +263,12 @@ export function useKeyboardNav(stage: RefObject<HTMLElement>, skip?: (event: Key
             handle_key(element, event);
         };
         window.addEventListener('keydown', handler);
+        start_gamepad_polling();
         return () => {
             window.removeEventListener('keydown', handler);
             stages.delete(element);
         };
-    }, []);
+    }, [element]);
 }
 
 /**
@@ -283,3 +307,151 @@ export function useDialogFocus(dialog: RefObject<HTMLElement>) {
         };
     }, []);
 }
+
+/*
+ * Gamepads in the menus. While at least one gamepad with the standard layout is connected and a stage is on the
+ * page, a frame loop reads them and works the topmost stage like the keyboard does:
+ *  - D-pad or left stick: arrow keys, repeating while held like keyboard auto-repeat,
+ *  - A: Enter on the focused control (a click); with nothing focused it focuses a control first, like an arrow
+ *    key; on a text field it does nothing, so it never submits a form by surprise,
+ *  - B or Back: Escape (closes the dialog, or leaves the menu),
+ *  - Start: into the menu, like Tab.
+ * Arrows and Escape are sent to the focused element as key events, so dialogs, cyclers and the navigation
+ * above handle them exactly like real keys (such synthetic events have no default action of their own).
+ */
+
+/** First repeat after a direction is held, then the time between repeats (ms). */
+const REPEAT_DELAY = 400;
+const REPEAT_INTERVAL = 130;
+
+/** Things that steer with the gamepads while they return true (the room's bunny); see lend_gamepads. */
+const gamepad_lenders = new Set<() => boolean>();
+/** Open views that read the gamepad buttons themselves (the gamepad setup); see useGamepadCapture. */
+let gamepad_captures = 0;
+
+let pad_frame = 0;
+let pad_presses = new GamepadPresses();
+let pad_direction_held: Direction | null = null;
+let pad_repeat_at = Infinity;
+
+/**
+ * Lets the gamepads steer something else, like your bunny in the room: while `steering()` returns true the
+ * menus leave the D-pad, stick, A and B alone, and Start moves into the menu. Returns the function that ends it.
+ */
+export function lend_gamepads(steering: () => boolean): () => void {
+    const lender = () => steering();
+    gamepad_lenders.add(lender);
+    return () => gamepad_lenders.delete(lender);
+}
+
+/** While `active`, the menus ignore the gamepads, e.g. while the setup dialog records a button mapping. */
+export function useGamepadCapture(active: boolean) {
+    useEffect(() => {
+        if (!active) return;
+        gamepad_captures++;
+        return () => {
+            gamepad_captures--;
+        };
+    }, [active]);
+}
+
+function pad_direction(gamepads: readonly Gamepad[]): Direction | null {
+    for (const gamepad of gamepads) {
+        if (pad_pressed(gamepad, PAD_UP)) return 'up';
+        if (pad_pressed(gamepad, PAD_DOWN)) return 'down';
+        if (pad_pressed(gamepad, PAD_LEFT)) return 'left';
+        if (pad_pressed(gamepad, PAD_RIGHT)) return 'right';
+        const x = gamepad.axes[0] ?? 0;
+        const y = gamepad.axes[1] ?? 0;
+        if (Math.max(Math.abs(x), Math.abs(y)) > STICK_DEAD_ZONE) {
+            if (Math.abs(x) > Math.abs(y)) return x < 0 ? 'left' : 'right';
+            return y < 0 ? 'up' : 'down';
+        }
+    }
+    return null;
+}
+
+/** A key press on the focused element, for the key handlers of the page. */
+function send_key(key: string) {
+    const target = document.activeElement instanceof HTMLElement ? document.activeElement : document.body;
+    const init = { key, code: key, bubbles: true, cancelable: true };
+    target.dispatchEvent(new KeyboardEvent('keydown', init));
+    target.dispatchEvent(new KeyboardEvent('keyup', init));
+}
+
+/**
+ * Into the menu, like Tab: the focused control of the top layer, else its default control, gets the focus as
+ * from the keyboard (highlighted, and has_keyboard_focus() becomes true).
+ */
+function pad_enter(stage: HTMLElement) {
+    const controls = controls_in(top_layer(stage));
+    const active = document.activeElement;
+    const target = active instanceof HTMLElement && controls.includes(active) ? active : default_control(controls);
+    if (!target || (target === active && target === keyboard_focused)) return;
+    // A control focused with the mouse is focused again, now from the "keyboard"
+    if (target === active) target.blur();
+    move_focus(target);
+}
+
+/** A: like Enter on the focused control. */
+function pad_activate(stage: HTMLElement) {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || !top_layer(stage).contains(active) || !is_control(active)) {
+        pad_enter(stage);
+        return;
+    }
+    // A text field keeps the focus (Enter would submit its form); typing needs a keyboard anyway
+    if (is_text_field(active)) return;
+    // Only a highlighted control is activated; one focused with the mouse is highlighted first
+    if (active !== keyboard_focused) {
+        pad_enter(stage);
+        return;
+    }
+    const clickable = active instanceof HTMLButtonElement || active instanceof HTMLAnchorElement;
+    if (clickable || active instanceof HTMLInputElement) active.click();
+    else send_key('Enter');
+}
+
+function poll_gamepads(now: number) {
+    pad_frame = 0;
+    const gamepads = standard_gamepads();
+    let stage: HTMLElement | undefined;
+    for (const element of stages) stage = element;
+    // Stops without gamepads or stages; gamepadconnected or the next stage starts it again
+    if (!stage || gamepads.length === 0) return;
+    pad_frame = requestAnimationFrame(poll_gamepads);
+    pad_presses.poll(gamepads);
+
+    const direction = pad_direction(gamepads);
+    const changed = direction !== pad_direction_held;
+    pad_direction_held = direction;
+    const steering = gamepad_captures === 0 && [...gamepad_lenders].some((lender) => lender());
+    if (gamepad_captures > 0 || steering || document.hidden) {
+        // A direction held now moves through the menu only after it is let go
+        pad_repeat_at = Infinity;
+        if (steering && pad_presses.went_down(PAD_START)) pad_enter(stage);
+        return;
+    }
+
+    if (direction && (changed || now >= pad_repeat_at)) {
+        pad_repeat_at = now + (changed ? REPEAT_DELAY : REPEAT_INTERVAL);
+        send_key(ARROW_KEYS[direction]);
+    } else if (!direction) pad_repeat_at = Infinity;
+    if (pad_presses.went_down(PAD_A)) pad_activate(stage);
+    if (pad_presses.went_down(PAD_B, PAD_BACK)) send_key('Escape');
+    if (pad_presses.went_down(PAD_START)) pad_enter(stage);
+}
+
+/** Starts the gamepad loop when there is a stage and a gamepad; buttons held at that moment count once let go. */
+function start_gamepad_polling() {
+    if (pad_frame || stages.size === 0) return;
+    const gamepads = standard_gamepads();
+    if (gamepads.length === 0) return;
+    pad_presses = new GamepadPresses();
+    pad_presses.poll(gamepads);
+    pad_direction_held = pad_direction(gamepads);
+    pad_repeat_at = Infinity;
+    pad_frame = requestAnimationFrame(poll_gamepads);
+}
+
+if (typeof window !== 'undefined') window.addEventListener('gamepadconnected', start_gamepad_polling);

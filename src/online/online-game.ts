@@ -26,7 +26,7 @@ import {
 import { read_pcx } from '../data';
 import { draw_begin, draw_end, put_text, register_background, register_mask, setpalette } from '../sdl/gfx';
 import { read_device_input } from '../sdl/input';
-import { addkey, intr_sysupdate, key_went_down, set_ai_hotkeys_enabled } from '../sdl/interrpt';
+import { addkey, gamepad_went_down, intr_sysupdate, key_went_down, set_ai_hotkeys_enabled } from '../sdl/interrpt';
 import {
     dj_play_sfx,
     dj_ready_mod,
@@ -39,6 +39,7 @@ import {
 import { INPUT_LEFT, INPUT_RIGHT, INPUT_UP, NO_CHEATS, Sim, SimFx, SimState, clone_state } from '../sim/sim';
 import type { Pob } from '../assets';
 import { CAPS_TOP, TextColor, fit_text, font_ready, init_font, render_text } from '../web/pixel/font';
+import { PAD_A, PAD_B, extra_mask } from '../extra-input';
 import { PANEL_NAME_X, PANEL_NAME_Y, clear_panel_names, render_panel_name } from './panel-names';
 
 export type OnlineGameOptions = {
@@ -320,6 +321,7 @@ export class OnlineGame {
         this.frame_request = requestAnimationFrame(this.loop);
         intr_sysupdate();
 
+        // A gamepad's Start or Back button counts as Escape (see intr_sysupdate)
         const escape_pressed = key_went_down(KEY.ESCAPE);
         const skip_pressed = escape_pressed || key_went_down('Enter') || key_went_down('Space');
 
@@ -347,7 +349,8 @@ export class OnlineGame {
         } else if (this.phase === 'ending') {
             this.fade_out_step(now);
         } else if (this.phase === 'scores') {
-            if (skip_pressed) this.fading_out_scores = true;
+            // A and B are jump buttons: only the score screen takes them, the replay must not end by accident
+            if (skip_pressed || gamepad_went_down(PAD_A, PAD_B)) this.fading_out_scores = true;
             this.scores_step(now);
         }
     };
@@ -360,7 +363,7 @@ export class OnlineGame {
         if (read_device_input(slot, 0, gamepads)) mask |= INPUT_LEFT;
         if (read_device_input(slot, 1, gamepads)) mask |= INPUT_RIGHT;
         if (read_device_input(slot, 2, gamepads)) mask |= INPUT_UP;
-        return mask;
+        return mask | extra_mask();
     }
 
     private release_keys = () => {

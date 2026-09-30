@@ -3,10 +3,10 @@
  * scaled by a whole number of device pixels, so frames, text and sprites share one crisp pixel grid.
  */
 import type { ComponentChildren, JSX } from 'preact';
-import { createContext } from 'preact';
-import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { LINE_HEIGHT, TextColor, fit_text, render_text, text_width, wrap_text } from './font';
 import { useDialogFocus, useKeyboardNav } from './keyboard-nav';
+import { Shell } from './console';
 
 export const STAGE_WIDTH = 480;
 export const STAGE_HEIGHT = 288;
@@ -115,37 +115,14 @@ function frame_variables() {
     return frame_vars;
 }
 
-const ScaleContext = createContext(1);
-
-/** The largest whole number of device pixels per game pixel that fits width x height game pixels on screen. */
-function compute_scale(width: number, height: number) {
-    if (typeof window === 'undefined') return 1;
-    const dpr = window.devicePixelRatio || 1;
-    const n = Math.max(1, Math.floor(Math.min((window.innerWidth * dpr) / width, (window.innerHeight * dpr) / height)));
-    return n / dpr;
-}
-
-/** CSS pixels per game pixel, following the window size. */
-export function usePixelScale(width = STAGE_WIDTH, height = STAGE_HEIGHT) {
-    const [scale, setScale] = useState(() => compute_scale(width, height));
-
-    useEffect(() => {
-        const update = () => setScale(compute_scale(width, height));
-        update();
-        window.addEventListener('resize', update);
-        return () => window.removeEventListener('resize', update);
-    }, [width, height]);
-
-    return scale;
-}
-
 /** The CSS variables the pixel components need: --px and the frame images. */
 export function pixel_variables(scale: number) {
     return { '--px': `${scale}px`, ...frame_variables() } as JSX.CSSProperties;
 }
 
 /**
- * The black screen with the centred, integer-scaled stage. The arrow keys move the focus between its controls;
+ * The screen with the 480x288 stage, framed by the Shell (plain black on a desktop, a wooden handheld on
+ * phones). The arrow keys move the focus between its controls;
  * `navSkip` returns true for keydown events the navigation must leave alone.
  */
 export function Stage({
@@ -155,23 +132,13 @@ export function Stage({
     children: ComponentChildren;
     navSkip?: (event: KeyboardEvent) => boolean;
 }) {
-    const scale = usePixelScale();
-    const style = pixel_variables(scale);
-    const stage = useRef<HTMLDivElement>(null);
+    const [stage, setStage] = useState<HTMLDivElement | null>(null);
     useKeyboardNav(stage, navSkip);
     return (
-        <ScaleContext.Provider value={scale}>
-            <div className="gp-root" style={style}>
-                <div ref={stage} className="gp-stage">
-                    {children}
-                </div>
-            </div>
-        </ScaleContext.Provider>
+        <Shell width={STAGE_WIDTH} height={STAGE_HEIGHT} style={pixel_variables} stageRef={setStage}>
+            {children}
+        </Shell>
     );
-}
-
-export function useScale() {
-    return useContext(ScaleContext);
 }
 
 const text_cache = new Map<string, HTMLCanvasElement>();

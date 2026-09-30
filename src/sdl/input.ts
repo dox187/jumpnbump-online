@@ -2,6 +2,8 @@ import { MOVEMENT } from '../constants';
 import { key_pressed, mouse_button_pressed } from './interrpt';
 import { tellServerPlayerMoved } from '../network';
 import ctx from '../context';
+import { player_gamepad_mask, touch_mask } from '../extra-input';
+import { INPUT_LEFT, INPUT_RIGHT, INPUT_UP } from '../sim/sim';
 
 const client_player_num = -1;
 
@@ -47,19 +49,30 @@ export function read_device_input(
     return false;
 }
 
+/**
+ * What steers a bunny in the local game besides its own control: the touch buttons steer Dott, and the n-th
+ * gamepad with the standard layout steers bunny n (see src/extra-input.ts).
+ */
+function local_extra_input(playerIndex: number): number {
+    return (playerIndex === 0 ? touch_mask() : 0) | player_gamepad_mask(playerIndex);
+}
+
 export function update_player_actions() {
     const player = ctx.player;
-    const gamepads = navigator.getGamepads();
+    // Some browsers only offer gamepads to secure (HTTPS) pages
+    const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
 
     if (client_player_num < 0) {
         for (let i = 0; i < 4; i++) {
-            let tmp = read_device_input(i, 0, gamepads); // left
+            const extra = local_extra_input(i);
+
+            let tmp = read_device_input(i, 0, gamepads) || (extra & INPUT_LEFT) !== 0; // left
             if (tmp !== player[i].action_left) tellServerPlayerMoved(i, MOVEMENT.LEFT, tmp);
 
-            tmp = read_device_input(i, 1, gamepads); // right
+            tmp = read_device_input(i, 1, gamepads) || (extra & INPUT_RIGHT) !== 0; // right
             if (tmp !== player[i].action_right) tellServerPlayerMoved(i, MOVEMENT.RIGHT, tmp);
 
-            tmp = read_device_input(i, 2, gamepads); // jump
+            tmp = read_device_input(i, 2, gamepads) || (extra & INPUT_UP) !== 0; // jump
             if (tmp !== player[i].action_up) tellServerPlayerMoved(i, MOVEMENT.UP, tmp);
         }
     } else {
