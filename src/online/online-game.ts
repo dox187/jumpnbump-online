@@ -40,6 +40,7 @@ import { INPUT_LEFT, INPUT_RIGHT, INPUT_UP, NO_CHEATS, Sim, SimFx, SimState, clo
 import type { Pob } from '../assets';
 import { CAPS_TOP, TextColor, fit_text, font_ready, init_font, render_text } from '../web/pixel/font';
 import { PAD_A, PAD_B, extra_mask } from '../extra-input';
+import { PANEL_NAME_X, PANEL_NAME_Y, clear_panel_names, render_panel_name } from './panel-names';
 
 export type OnlineGameOptions = {
     canvas: HTMLCanvasElement;
@@ -67,11 +68,6 @@ export type Countdown = number | null;
 
 const BUNNY_LABELS = ['DOTT', 'JIFFY', 'FIZZ', 'MIJJI'];
 const SCORE_NAME_WIDTH = 56;
-/** The name plates cover the bunny names printed on the level's side panel, one panel per 64 rows. */
-const PLATE_X = 354;
-const PLATE_WIDTH = 45;
-const PLATE_TOP = 20;
-const PLATE_HEIGHT = 14;
 /** How long "GO!" stays up, in frames. */
 const GO_FRAMES = 40;
 
@@ -187,6 +183,11 @@ export class OnlineGame {
         this.make_name_tags(options.match.slots.map((s) => s?.name ?? null));
         set_ai_hotkeys_enabled(false);
         init_level_scene(this.pal);
+        const background = read_pcx('level.pcx', this.pal);
+        clear_panel_names(background);
+        register_background(background, this.pal);
+        // Masks copy pixels from the background, including the labels on some custom levels.
+        register_mask(read_pcx('mask.pcx', null), this.pal);
         if (!options.noflies) position_flies();
 
         memset(this.cur_pal, 0, 768);
@@ -273,7 +274,7 @@ export class OnlineGame {
         for (let i = 0; i < JNB_MAX_PLAYERS; i++) {
             const name = names[i];
             const color: TextColor = i === this.options.slot ? 'gold' : 'white';
-            this.plate_tags[i] = name ? name_tag(name, PLATE_WIDTH - 4, color) : null;
+            this.plate_tags[i] = name ? { canvas: render_panel_name(name, i) } : null;
             this.score_tags[i] = name ? name_tag(name, SCORE_NAME_WIDTH, color) : null;
         }
     }
@@ -289,7 +290,7 @@ export class OnlineGame {
         return target ? Math.min(1, current / target) : 1;
     }
 
-    /** The players' names on dark plates over the bunny names of the side panel. */
+    /** Compact names painted directly onto the cleared stone panels. */
     private draw_name_plates(state: SimState) {
         const screen = this.screen;
         if (!screen) return;
@@ -299,13 +300,7 @@ export class OnlineGame {
         for (let i = 0; i < JNB_MAX_PLAYERS; i++) {
             const tag = this.plate_tags[i];
             if (!tag || !state.player[i].enabled) continue;
-            const top = PLATE_TOP + i * 64;
-            screen.fillStyle = '#000';
-            screen.fillRect(PLATE_X, top, PLATE_WIDTH, PLATE_HEIGHT);
-            screen.fillStyle = 'rgba(40, 28, 16, 1)';
-            screen.fillRect(PLATE_X + 1, top + 1, PLATE_WIDTH - 2, PLATE_HEIGHT - 2);
-            const x = PLATE_X + Math.floor((PLATE_WIDTH - tag.canvas.width) / 2);
-            screen.drawImage(tag.canvas, x, top + 3 - CAPS_TOP);
+            screen.drawImage(tag.canvas, PANEL_NAME_X, PANEL_NAME_Y + i * 64 - 2);
         }
         screen.globalAlpha = 1;
     }
