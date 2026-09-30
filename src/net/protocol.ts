@@ -26,7 +26,7 @@ export const PASSWORD_MAX_LENGTH = 64;
 /** Confirmed states whose frame is a multiple of this are hashed and compared with the server. */
 export const HASH_INTERVAL = 60;
 export const END_SCORE_OPTIONS = [5, 10, 25, 50, 100] as const;
-export const DEFAULT_END_SCORE = 100;
+export const DEFAULT_END_SCORE = 10;
 export const DEFAULT_LEVEL = 'jumpbump.dat';
 
 export const BUNNY_NAMES = ['Dott', 'Jiffy', 'Fizz', 'Mijji'] as const;

@@ -35,7 +35,7 @@ Features of the online mode:
 - Anybody can sit a match out and watch it. People who come in while a match runs, or when all four bunnies are
   taken, are spectators and watch the running match live.
 - The host chooses the level (from a scrolling list of 250+ levels) and the score limit (first to 5, 10, 25, 50
-  or 100 bumps) and starts the match; it needs at least two players.
+  or 100 bumps, 10 for a new room) and starts the match; it needs at least two players.
 - A 3-2-1 countdown at the start, the players' names on the level's side panel, the last death replayed in slow
   motion at the end, then the classic score screen with the names; the result table stays available in the room
   under **LAST MATCH**.
