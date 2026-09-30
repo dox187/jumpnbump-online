@@ -6,6 +6,10 @@ A self-hostable, browser-based **online multiplayer** version of _Jump 'n Bump_,
 score by jumping on the other bunnies' heads. Players only need a browser: create a room, send your friends the
 invite link, pick one of 250+ levels and play, each on your own computer.
 
+| The lobby                                         | A room                                         |
+| ------------------------------------------------- | ---------------------------------------------- |
+| ![The lobby with one room](screenshots/lobby.png) | ![Two players in a room](screenshots/room.png) |
+
 ## The original
 
 - **Jump 'n Bump** was released in 1998 by **Brainchild Design** (Mattias Brynervall, Andreas Brynervall, Martin
