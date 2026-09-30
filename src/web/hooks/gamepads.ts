@@ -3,6 +3,8 @@ import { useEffect } from 'preact/hooks';
 import { useState } from 'preact/hooks';
 
 const getConnectedGamepads = () => {
+    // Some browsers (Firefox) only offer gamepads to secure (HTTPS) pages
+    if (!navigator.getGamepads) return [];
     return navigator.getGamepads().filter(Boolean) as Gamepad[];
 };
 
