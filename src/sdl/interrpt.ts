@@ -1,3 +1,5 @@
+// Changed by dox187 on 2026-09-29 and 2026-09-30 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
+
 import { KEY } from '../constants';
 import { poll_events, get_mouse_buttons } from './events';
 import { toggle_fullscreen } from './gfx';

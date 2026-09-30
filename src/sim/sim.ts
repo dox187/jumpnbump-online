@@ -1,3 +1,6 @@
+// Contains code from src/main.ts, src/menu.ts and src/network.ts of jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js),
+// changed by dox187 on 2026-09-29.
+
 /**
  * Deterministic game simulation shared by the local game, the online client and the online server.
  *

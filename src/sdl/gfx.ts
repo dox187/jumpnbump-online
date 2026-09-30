@@ -1,3 +1,5 @@
+// Changed by dox187 on 2026-09-30 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
+
 import { assert } from '../c';
 import { get_gob, Gob } from '../assets';
 import { PalettedRenderer } from './paletted-renderer';

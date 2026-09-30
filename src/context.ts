@@ -1,3 +1,5 @@
+// Changed by dox187 on 2026-09-29 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
+
 import { GameInputDevice } from 'inputs';
 import { Pob } from './assets';
 import { DEFAULT_CONTROLS, JNB_MAX_PLAYERS, NUM } from './constants';

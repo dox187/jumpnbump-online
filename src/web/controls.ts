@@ -1,3 +1,6 @@
+// Contains code from src/web/components/controls.tsx of jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js),
+// changed by dox187 on 2026-09-29.
+
 /** Input devices a player can choose, and helpers for naming and mapping gamepads. */
 import { DEFAULT_CONTROLS } from '../constants';
 

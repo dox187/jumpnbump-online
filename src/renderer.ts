@@ -1,3 +1,5 @@
+// Changed by dox187 on 2026-09-29 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
+
 import { object_anims } from './animation';
 import { cheats } from './cheats';
 import { BAN, JNB_MAX_PLAYERS, NUM } from './constants';

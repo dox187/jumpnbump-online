@@ -1,3 +1,5 @@
+// Changed by dox187 on 2026-09-29 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
+
 import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
 import tailwindcss from '@tailwindcss/vite';

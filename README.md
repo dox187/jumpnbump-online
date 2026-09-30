@@ -222,3 +222,8 @@ and the sound, gore and flies settings from **OPTIONS**.
 
 Jump 'n Bump is distributed under the GNU General Public License, version 2, or (at your option) any later version
 (GPL-2.0+). See the AUTHORS file for credits.
+
+This fork was changed from [jumpnbump.js](https://github.com/jamsinclair/jumpnbump.js) by dox187 on 2026-09-29 and
+2026-09-30 (see [Changes compared with jumpnbump.js](#changes-compared-with-jumpnbumpjs) and the git history). Each
+changed file, and each new file that contains code from jumpnbump.js, says so in its first lines; this README,
+`package.json` and `package-lock.json` were changed as well.

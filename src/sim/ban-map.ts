@@ -1,3 +1,6 @@
+// Contains code from src/level.ts of jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js),
+// changed by dox187 on 2026-09-29.
+
 import { BAN } from '../constants';
 
 const LEVEL_SCALE_FACTOR = 4;

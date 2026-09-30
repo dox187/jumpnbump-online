@@ -1,3 +1,5 @@
+// Changed by dox187 on 2026-09-29 and 2026-09-30 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
+
 import { read_data } from '../data';
 import { MAX_VOLUME, MOD, SFX } from '../constants';
 import { Mod } from '@webtrack/mod';

@@ -1,3 +1,5 @@
+// Changed by dox187 on 2026-09-29 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
+
 import { object_anims, player_anims } from './animation';
 import { cheats, check_cheats, reset_cheats } from './cheats';
 import {

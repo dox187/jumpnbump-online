@@ -1,3 +1,5 @@
+// Changed by dox187 on 2026-09-29 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
+
 import { JNB_MAX_PLAYERS, JNB_VERSION, KEY, MOD, NUM, OBJ, OBJ_ANIM, SCREEN_WIDTH, SFX, SFX_FREQ } from './constants';
 import { read_pcx } from './data';
 import { add_object, add_pob, draw_pobs } from './renderer';

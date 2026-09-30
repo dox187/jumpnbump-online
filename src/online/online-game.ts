@@ -1,3 +1,6 @@
+// Contains code from src/main.ts, src/menu.ts and src/renderer.ts of jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js),
+// changed by dox187 on 2026-09-29 and 2026-09-30.
+
 /**
  * Runs one online match in a canvas: loads the level, drives the NetSession every animation frame,
  * draws the predicted state with the original renderer, replays the last death in slow motion and

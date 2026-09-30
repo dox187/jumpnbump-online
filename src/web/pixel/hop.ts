@@ -1,3 +1,6 @@
+// Contains code from src/menu.ts and src/sdl/input.ts of jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js),
+// changed by dox187 on 2026-09-30.
+
 /**
  * Hopping around the menu forest in an online room, like in the local game's menu.
  *
