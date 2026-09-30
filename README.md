@@ -65,7 +65,8 @@ podman run -d --name jumpnbump-online --init -p 8080:8080 --restart unless-stopp
 
 Or deploy it as a Portainer stack: paste [`portainer-stack.yml`](portainer-stack.yml) into the stack web editor. It
 uses the image built above and does not build anything itself. Under Podman a locally built image is called
-`localhost/jumpnbump-online:latest`; under Docker change it to `jumpnbump-online:latest`.
+`localhost/jumpnbump-online:latest`; under Docker change it to `jumpnbump-online:latest`. Change the host port if
+8080 is taken; the reverse proxy settings in it are commented out (see below).
 
 To update, pull and rebuild, then redeploy the stack (or recreate the container):
 
@@ -129,9 +130,9 @@ location / {
 ```
 
 In Nginx Proxy Manager, enable **Websockets Support** on the proxy host. When the proxy runs in a container, put
-the game on the proxy's network (see the `networks` section of [`portainer-stack.yml`](portainer-stack.yml)) and
-forward to `http://jumpnbump-online:8080`; under Podman a proxy container often cannot reach another network's
-published ports through the host's address.
+the game on the proxy's network (uncomment the `networks` parts of [`portainer-stack.yml`](portainer-stack.yml)
+and fill in the network's name), set `TRUST_PROXY` to `1` and forward to `http://jumpnbump-online:8080`; under
+Podman a proxy container often cannot reach another network's published ports through the host's address.
 
 ## Playing online
 

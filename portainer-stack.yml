@@ -6,8 +6,11 @@
 # Under Podman the locally built image is called localhost/jumpnbump-online:latest;
 # under Docker change it to jumpnbump-online:latest.
 #
-# The container joins the reverse proxy's network, so Nginx Proxy Manager can forward to
-# http://jumpnbump-online:8080 (enable Websockets Support). Change the network name if yours differs.
+# Change the host port (the left side of "8080:8080") if it is taken on your host.
+#
+# Behind a reverse proxy running in a container (e.g. Nginx Proxy Manager), uncomment the
+# networks parts below and put your proxy's network name in, so the proxy can forward to
+# http://jumpnbump-online:8080 (enable Websockets Support), and set TRUST_PROXY to "1".
 services:
   jumpnbump-online:
     image: localhost/jumpnbump-online:latest
@@ -20,11 +23,11 @@ services:
     environment:
       PORT: "8080"
       # Behind a reverse proxy every player arrives from the proxy's address; "1" makes the
-      # per-player limits use X-Forwarded-For. Set it to "0" if players connect to this port directly.
-      TRUST_PROXY: "1"
-    networks:
-      - default
-      - proxy
+      # per-player limits use X-Forwarded-For. Keep it "0" when players connect to this port directly.
+      TRUST_PROXY: "0"
+    # networks:
+    #   - default
+    #   - proxy
     restart: unless-stopped
     # Podman's Docker-compatible API re-splits healthcheck arguments on spaces; keep them space-free.
     healthcheck:
@@ -34,7 +37,7 @@ services:
       retries: 3
       start_period: 10s
 
-networks:
-  proxy:
-    name: your-reverse-proxy-network
-    external: true
+# networks:
+#   proxy:
+#     name: your-reverse-proxy-network
+#     external: true
