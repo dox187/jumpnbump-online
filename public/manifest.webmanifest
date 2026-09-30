@@ -7,7 +7,7 @@
     "display": "fullscreen",
     "orientation": "any",
     "background_color": "#000000",
-    "theme_color": "#201308",
+    "theme_color": "#000000",
     "icons": [
         {
             "src": "/jumpnbump.png",
