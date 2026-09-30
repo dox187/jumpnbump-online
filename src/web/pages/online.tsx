@@ -56,9 +56,10 @@ const onlinePageMeta: PageMeta = {
 /** Where the Source links point; set VITE_SOURCE_URL at build time when you publish your own changes. */
 const SOURCE_URL = import.meta.env.VITE_SOURCE_URL || 'https://github.com/jamsinclair/jumpnbump.js';
 
-type Toast = { message: string; color: TextColor; seq: number; at: number };
+type Toast = { message: string; color: TextColor; seq: number; at: number; ms?: number };
 
 const TOAST_MS = 5000;
+const COPIED_TOAST_MS = 500;
 
 /** Per room, the match whose result the player has seen; the room view unmounts while a match runs. */
 const seen_results = new Map<string, string>();
@@ -151,7 +152,7 @@ function ToastView({ toast, onDismiss }: { toast: Toast | null; onDismiss: () =>
     const [visible, setVisible] = useState(false);
 
     useEffect(() => {
-        const remaining = toast ? toast.at + TOAST_MS - Date.now() : 0;
+        const remaining = toast ? toast.at + (toast.ms ?? TOAST_MS) - Date.now() : 0;
         if (remaining <= 0) {
             setVisible(false);
             return;
@@ -174,6 +175,38 @@ function ToastView({ toast, onDismiss }: { toast: Toast | null; onDismiss: () =>
             <Text text={toast.message} color={toast.color} />
         </div>
     );
+}
+
+/**
+ * Copies text to the clipboard. The Clipboard API only exists on HTTPS pages and localhost; over plain HTTP
+ * (e.g. a LAN address) the old copy command on a temporary text field still works during a click.
+ */
+async function copy_text(text: string): Promise<boolean> {
+    if (window.isSecureContext && navigator.clipboard) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch {
+            // fall back to the copy command
+        }
+    }
+    const focused = document.activeElement as HTMLElement | null;
+    const field = document.createElement('textarea');
+    field.value = text;
+    field.setAttribute('readonly', '');
+    field.style.position = 'fixed';
+    field.style.opacity = '0';
+    document.body.appendChild(field);
+    field.select();
+    let copied = false;
+    try {
+        copied = document.execCommand('copy');
+    } catch {
+        copied = false;
+    }
+    field.remove();
+    focused?.focus?.();
+    return copied;
 }
 
 function NameDialog({
@@ -633,7 +666,7 @@ function Room({
     state: NetState;
     room: RoomDetail;
     onOptions: () => void;
-    onToast: (message: string, color?: TextColor) => void;
+    onToast: (message: string, color?: TextColor, ms?: number) => void;
 }) {
     const [showLevels, setShowLevels] = useState(false);
     const [showResults, setShowResults] = useState(false);
@@ -656,14 +689,10 @@ function Room({
 
     const invite = () => {
         const link = `${window.location.origin}/?room=${room.id}`;
-        navigator.clipboard?.writeText(link).then(
-            () =>
-                onToast(
-                    room.locked ? 'Invite link copied. They need the password too.' : 'Invite link copied!',
-                    'green'
-                ),
-            () => window.prompt('Copy this invite link:', link)
-        );
+        copy_text(link).then((copied) => {
+            if (copied) onToast('Invite link copied!', 'green', COPIED_TOAST_MS);
+            else window.prompt('Copy this invite link:', link);
+        });
     };
 
     const players = room.members.filter((m) => m.slot !== null).length;
@@ -893,8 +922,8 @@ export default function Online() {
     const [toast, setToast] = useState<Toast | null>(null);
     const toastSeq = useRef(0);
 
-    const showToast = (message: string, color: TextColor = 'red') =>
-        setToast({ message, color, seq: ++toastSeq.current, at: Date.now() });
+    const showToast = (message: string, color: TextColor = 'red', ms?: number) =>
+        setToast({ message, color, seq: ++toastSeq.current, at: Date.now(), ms });
 
     useEffect(() => {
         load_game_assets().then(setAssets, (error) => {
