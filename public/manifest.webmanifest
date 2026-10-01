@@ -10,19 +10,19 @@
     "theme_color": "#000000",
     "icons": [
         {
-            "src": "/jumpnbump.png",
+            "src": "/jumpnbump.png?v=jiffy",
             "sizes": "96x96",
             "type": "image/png",
             "purpose": "any"
         },
         {
-            "src": "/icon-192.png",
+            "src": "/icon-192.png?v=jiffy",
             "sizes": "192x192",
             "type": "image/png",
             "purpose": "any"
         },
         {
-            "src": "/icon-512.png",
+            "src": "/icon-512.png?v=jiffy",
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "any"
