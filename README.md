@@ -158,8 +158,8 @@ Podman a proxy container often cannot reach another network's published ports th
 3. Press **INVITE** to copy the invite link and send it to your friends. For a protected room they also need the
    password.
 4. Click a free bunny in the forest to play as it, or **SIT OUT** to only watch. Your bunny hops around with your
-   controls; press **Tab** to move the keyboard into the menu (arrow keys, Enter) and **Escape** to get back to the
-   bunny. The host chooses the level and the score limit and presses **START MATCH**.
+   controls (not with the battery saver, see [Phones and tablets](#phones-and-tablets)); press **Tab** to move the
+   keyboard into the menu (arrow keys, Enter) and **Escape** to get back to the bunny. The host chooses the level and the score limit and presses **START MATCH**.
 5. In a match, move with the keys or the gamepad chosen under **OPTIONS** (arrow keys by default). The players'
    names are on the side panel; hold **TAB** to see the list of players, **SHIFT + F** toggles fullscreen. Pressing
    **ESC** twice leaves the match; for the host it ends the match for everyone. Spectators go back to the room with
@@ -208,6 +208,11 @@ original proportions and use the largest screen area that fits alongside the con
   to about 6% busy. Browser buffer memory during a match also went from a 50-100 MB sawtooth to a steady 4 MB.
   Only the song that is playing and the sound effects keep the audio device running, and nothing does outside a
   game. These figures come from emulation, not from a real phone.
+- **Battery saver:** on by default on phones and tablets, and available on computers under **OPTIONS**. Outside
+  matches the forest then stands still: no butterflies or flies, the bunnies wait at their spots, and a room is
+  drawn again only when somebody picks a bunny, sits out, joins or leaves. In the same emulated phone, the browser
+  then used about 0.3% of a CPU core on the start page instead of 8%, and 0.4% in a room instead of 9%. Without
+  the battery saver, rooms are drawn at 30 frames a second (5.6%).
 
 Music needs HTTPS or localhost; some browsers also require HTTPS for gamepads.
 

@@ -3,7 +3,11 @@
  * then, butterflies and the fly swarm, drawn at 60 Hz on a canvas the size of the stage.
  *
  * In a room the players' bunnies hop around instead: your own one with the menu physics (HopBunny), the
- * others from position samples relayed over the network, each with its name tag above it.
+ * others from position samples relayed over the network, each with its name tag above it. A room is drawn
+ * at 30 frames a second; the bunnies still move in 60 Hz steps.
+ *
+ * With the battery saver the scene is a still picture: no butterflies or flies, every bunny at its spot,
+ * drawn again only when the bunnies change (a player picks another bunny, sits out, joins or leaves).
  */
 import { useEffect, useRef } from 'preact/hooks';
 import { object_anims } from '../../animation';
@@ -93,6 +97,9 @@ type Butterfly = {
 };
 
 const TICK_MS = 1000 / 60;
+/** A room is drawn 30 times a second. Frames come a little early, so a 60 Hz screen draws every second one. */
+const ROOM_FRAME_MS = 1000 / 30;
+const FRAME_SLACK_MS = 2;
 const GRAVITY = 12288 / 65536;
 const FLIGHT = { left: SCENE_X + 16, right: SCENE_X + 384, top: SCENE_Y + 52, bottom: SCENE_Y + 176 };
 const FLY_CENTER = { x: SCENE_X + 216, y: SCENE_Y + 168 };
@@ -149,6 +156,12 @@ function remote_position(hops: readonly RemoteHop[], since: number, now: number)
     if (Math.abs(b[0] - a[0]) > SNAP_PX || Math.abs(b[1] - a[1]) > SNAP_PX) return a;
     const f = (t - older!.at) / (newer!.at - older!.at);
     return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2]];
+}
+
+/** Your bunny standing at its spot, as a sample for the others (it no longer moves with the battery saver). */
+export function home_hop(slot: number, max_x?: number): HopSample {
+    const bunny = new HopBunny(slot, null, max_x);
+    return [bunny.x, bunny.y, bunny.image];
 }
 
 /** A faded copy of a sprite for bunnies nobody plays yet. */
@@ -214,7 +227,7 @@ function update_butterfly(b: Butterfly) {
  * then. In a room they stand at their spots unless moved: `own` runs your bunny with the menu physics at 60 Hz
  * and reports its samples; `remote` gives, per slot, the recent samples of the other players' bunnies
  * (oldest first), which are drawn REMOTE_DELAY_MS behind. A bunny that changes hands or goes free is back
- * at its spot.
+ * at its spot. `still` (the battery saver) shows one still picture instead, see the top of this file.
  */
 export function Scene({
     assets,
@@ -223,6 +236,7 @@ export function Scene({
     own,
     remote,
     paused = false,
+    still = false,
 }: {
     assets: GameAssets;
     bunnies: SceneBunny[];
@@ -231,6 +245,8 @@ export function Scene({
     own?: SceneOwnBunny;
     remote?: () => ReadonlyMap<number, readonly RemoteHop[]>;
     paused?: boolean;
+    /** Battery saver: a still picture, drawn again only when `bunnies` or the header change. */
+    still?: boolean;
 }) {
     const canvas_ref = useRef<HTMLCanvasElement>(null);
     const wanted = useRef(bunnies);
@@ -241,6 +257,8 @@ export function Scene({
     remote_ref.current = remote;
     const header_ref = useRef(showHeader);
     header_ref.current = showHeader;
+    // What a still picture shows; it is drawn again when this changes
+    const still_picture = still ? JSON.stringify([bunnies, showHeader]) : '';
 
     useEffect(() => {
         // Keep the last canvas frame and stop requesting frames until the user reconnects.
@@ -258,6 +276,8 @@ export function Scene({
         let last = performance.now();
         let accumulator = 0;
         let request = 0;
+        let drawn = last;
+        let dirty = false;
         /** Your own bunny, and what was last reported of it. */
         let hop: HopBunny | null = null;
         let sent: HopSample | null = null;
@@ -374,7 +394,7 @@ export function Scene({
             if (tag.crown) context.drawImage(icon_canvas('crown'), left - 3, top - 5);
             if (tag.mine) {
                 // Like the .gp-bob animation: 800 ms in four steps, up two pixels and down again
-                const bob = [0, -1, -2, -1][Math.floor((performance.now() % 800) / 200)];
+                const bob = still ? 0 : [0, -1, -2, -1][Math.floor((performance.now() % 800) / 200)];
                 context.drawImage(icon_canvas('down'), clamp(x + 5, 0, STAGE_WIDTH - 7), Math.max(0, top - 8 + bob));
             }
         };
@@ -385,7 +405,7 @@ export function Scene({
             context.drawImage(assets.menu, SCENE_X, SCENE_Y);
             if (!header_ref.current) context.fillRect(0, 0, STAGE_WIDTH, 63);
             context.fillStyle = '#000';
-            for (const fly of flies) context.fillRect(fly.x, fly.y, 1, 1);
+            if (!still) for (const fly of flies) context.fillRect(fly.x, fly.y, 1, 1);
             const now = performance.now();
             const own = own_ref.current;
             const others = remote_ref.current?.();
@@ -400,7 +420,7 @@ export function Scene({
                 const moved: HopSample | null =
                     hop && own && hop.slot === b.slot
                         ? [hop.x, hop.y, hop.image]
-                        : !b.ghost && samples && b.slot !== own?.slot
+                        : !still && !b.ghost && samples && b.slot !== own?.slot
                           ? remote_position(samples, b.free_at, now)
                           : null;
                 if (moved) {
@@ -417,9 +437,11 @@ export function Scene({
                 draw_sprite(sprite, x, y, b.ghost ? shadows[index] : sprite.canvas);
                 if (b.tag) tags.push([b.tag, Math.round(x), Math.round(y), b.tag.mine ? 2 : b.ghost ? 0 : 1]);
             }
-            for (const butterfly of butterflies) {
-                const image = object_anims[butterfly.anim].frame[butterfly.frame].image;
-                draw_sprite(assets.objects[image], butterfly.x, butterfly.y);
+            if (!still) {
+                for (const butterfly of butterflies) {
+                    const image = object_anims[butterfly.anim].frame[butterfly.frame].image;
+                    draw_sprite(assets.objects[image], butterfly.x, butterfly.y);
+                }
             }
             // Like the menu's mask: the front end of the log hides whatever is behind it
             context.drawImage(assets.menu_front, SCENE_X, SCENE_Y);
@@ -432,19 +454,25 @@ export function Scene({
             request = requestAnimationFrame(loop);
             accumulator = Math.min(accumulator + now - last, 250);
             last = now;
-            let ticked = false;
             while (accumulator >= TICK_MS) {
                 accumulator -= TICK_MS;
                 tick();
-                ticked = true;
+                dirty = true;
             }
-            if (ticked) draw();
+            const in_room = !!own_ref.current || !!remote_ref.current;
+            if (dirty && (!in_room || now - drawn >= ROOM_FRAME_MS - FRAME_SLACK_MS)) {
+                draw();
+                drawn = now;
+                dirty = false;
+            }
         };
         sync_bunnies();
         draw();
+        // The battery saver keeps this picture until the bunnies change (still_picture below)
+        if (still) return;
         request = requestAnimationFrame(loop);
         return () => cancelAnimationFrame(request);
-    }, [assets, paused]);
+    }, [assets, paused, still, still_picture]);
 
     return (
         <>

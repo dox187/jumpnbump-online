@@ -12,6 +12,8 @@ export type OnlineSettings = {
     noFlies: boolean;
     /** On-screen touch buttons on phones and tablets; null means on. Computers never show them. */
     touch: boolean | null;
+    /** A still forest outside matches; null means on for phones and tablets, off for computers. */
+    batterySaver: boolean | null;
 };
 
 const STORAGE_KEY = 'online-settings';
@@ -25,6 +27,7 @@ const DEFAULT_SETTINGS: OnlineSettings = {
     noGore: false,
     noFlies: false,
     touch: null,
+    batterySaver: null,
 };
 
 function load(): OnlineSettings {
@@ -68,6 +71,11 @@ export function is_mobile_device() {
 /** Whether the touch buttons show: only on phones and tablets, and there unless turned off. */
 export function touch_enabled(settings: OnlineSettings) {
     return is_mobile_device() && settings.touch !== false;
+}
+
+/** Whether the battery saver is on: by default on phones and tablets only. */
+export function battery_saver_enabled(settings: OnlineSettings) {
+    return settings.batterySaver ?? is_mobile_device();
 }
 
 /** Per-browser settings, remembered in localStorage when it is available. */
