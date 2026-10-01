@@ -1,4 +1,4 @@
-// Changed by dox187 on 2026-09-29 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
+// Changed by dox187 on 2026-09-29 and 2026-10-01 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
 
 import { object_anims, player_anims } from './animation';
 import { cheats, check_cheats, reset_cheats } from './cheats';
@@ -33,7 +33,7 @@ import {
     dj_stop_sfx_channel,
 } from './sdl/sound';
 import { update_player_actions } from './sdl/input';
-import { addkey, intr_sysupdate, key_pressed } from './sdl/interrpt';
+import { intr_sysupdate, key_pressed } from './sdl/interrpt';
 import { GET_BAN_MAP_TILE, SET_BAN_MAP, get_ban_map } from './level';
 import {
     serverTellEveryoneGoodbye,
@@ -73,7 +73,8 @@ import { run_in_frame_loop } from './loop';
 import { deinit_controls_listener, init_controls_listener } from './sdl/events';
 import { Pob, register_gob, get_gob } from './assets';
 import { GameInputDevice } from 'inputs';
-import { Sim, create_state } from './sim/sim';
+import { INPUT_LEFT, INPUT_RIGHT, INPUT_UP, Sim, create_state } from './sim/sim';
+import { LocalBot } from './local-bot';
 import { local_fx } from './fx';
 
 let endscore_reached = 0;
@@ -90,6 +91,7 @@ let server_said_bye = 0;
 let flies_enabled = true;
 
 const local_sim_instance = new Sim(create_state(1), get_ban_map());
+const local_bots = Array.from({ length: JNB_MAX_PLAYERS }, () => new LocalBot());
 
 /** The shared simulation, pointed at the global context of the local game. */
 function local_sim() {
@@ -105,6 +107,7 @@ function collision_check() {
 }
 
 async function game_loop() {
+    for (const bot of local_bots) bot.reset();
     const main_info = ctx.info;
     const player = ctx.player;
     let mod_vol, sfx_vol;
@@ -513,189 +516,26 @@ export async function main(canvas: HTMLCanvasElement, options: MainOptions): Pro
     return result;
 }
 
-function map_tile(pos_x: number, pos_y: number) {
-    let tile;
-
-    pos_x = pos_x >> 4;
-    pos_y = pos_y >> 4;
-
-    if (pos_x < 0 || pos_x >= 17 || pos_y < 0 || pos_y >= 22) return BAN.VOID;
-
-    tile = GET_BAN_MAP_TILE(pos_y, pos_x);
-    return tile;
-}
-
 function cpu_move() {
-    const player = ctx.player;
-    let lm, rm, jm;
-    let i, j;
-    let cur_posx, cur_posy, tar_posx, tar_posy;
-    let players_distance;
-    let target = null;
-    let nearest_distance = -1;
-
-    for (i = 0; i < JNB_MAX_PLAYERS; i++) {
-        nearest_distance = -1;
-        if (ctx.ai[i] && player[i].enabled) {
-            // this player is a computer
-            // get nearest target
-            for (j = 0; j < JNB_MAX_PLAYERS; j++) {
-                let deltax, deltay;
-
-                if (i == j || !player[j].enabled) continue;
-
-                deltax = player[j].x - player[i].x;
-                deltay = player[j].y - player[i].y;
-                players_distance = deltax * deltax + deltay * deltay;
-
-                if (players_distance < nearest_distance || nearest_distance == -1) {
-                    target = player[j];
-                    nearest_distance = players_distance;
-                }
-            }
-
-            if (target === null) {
-                continue;
-            }
-
-            cur_posx = player[i].x >> 16;
-            cur_posy = player[i].y >> 16;
-            tar_posx = target.x >> 16;
-            tar_posy = target.y >> 16;
-
-            /** nearest player found, get him */
-            /* here goes the artificial intelligence code */
-
-            /* X-axis movement */
-            if (tar_posx > cur_posx) {
-                // if true target is on the right side
-                // go after him
-                lm = 0;
-                rm = 1;
-            } // target on the left side
-            else {
-                lm = 1;
-                rm = 0;
-            }
-
-            if (
-                cur_posy - tar_posy < 32 &&
-                cur_posy - tar_posy > 0 &&
-                tar_posx - cur_posx < 32 + 8 &&
-                tar_posx - cur_posx > -32
-            ) {
-                lm = !lm;
-                rm = !rm;
-            } else if (tar_posx - cur_posx < 4 + 8 && tar_posx - cur_posx > -4) {
-                // makes the bunnies less "nervous"
-                lm = 0;
-                lm = 0;
-            }
-
-            /* Y-axis movement */
-            if (
-                map_tile(cur_posx, cur_posy + 16) != BAN.VOID &&
-                ((i == 0 && key_pressed(KEY.PL1_JUMP)) ||
-                    (i == 1 && key_pressed(KEY.PL2_JUMP)) ||
-                    (i == 2 && key_pressed(KEY.PL3_JUMP)) ||
-                    (i == 3 && key_pressed(KEY.PL4_JUMP)))
-            )
-                jm = 0; // if we are on ground and jump key is being pressed,
-            //first we have to release it or else we won't be able to jump more than once
-            else if (map_tile(cur_posx, cur_posy - 8) != BAN.VOID && map_tile(cur_posx, cur_posy - 8) != BAN.WATER)
-                jm = 0; // don't jump if there is something over it
-            else if (
-                map_tile(cur_posx - lm * 8 + rm * 16, cur_posy) != BAN.VOID &&
-                map_tile(cur_posx - lm * 8 + rm * 16, cur_posy) != BAN.WATER &&
-                cur_posx > 16 &&
-                cur_posx < 352 - 16 - 8
-            )
-                // obstacle, jump
-                jm = 1; // if there is something on the way, jump over it
-            else if (
-                ((i == 0 && key_pressed(KEY.PL1_JUMP)) ||
-                    (i == 1 && key_pressed(KEY.PL2_JUMP)) ||
-                    (i == 2 && key_pressed(KEY.PL3_JUMP)) ||
-                    (i == 3 && key_pressed(KEY.PL4_JUMP))) &&
-                map_tile(cur_posx - lm * 8 + rm * 16, cur_posy + 8) != BAN.VOID &&
-                map_tile(cur_posx - lm * 8 + rm * 16, cur_posy + 8) != BAN.WATER
-            )
-                jm = 1; // this makes it possible to jump over 2 tiles
-            else if (
-                cur_posy - tar_posy < 32 &&
-                cur_posy - tar_posy > 0 &&
-                tar_posx - cur_posx < 32 + 8 &&
-                tar_posx - cur_posx > -32
-            )
-                // don't jump - running away
-                jm = 0;
-            else if (tar_posy <= cur_posy)
-                // target on the upper side
-                jm = 1;
-            // target below
-            else jm = 0;
-
-            /** Artificial intelligence done, now apply movements */
-            if (lm) {
-                let key: KEY;
-                if (i == 0) key = KEY.PL1_LEFT;
-                else if (i == 1) key = KEY.PL2_LEFT;
-                else if (i == 2) key = KEY.PL3_LEFT;
-                else key = KEY.PL4_LEFT;
-
-                addkey(key, true);
-            } else {
-                let key: KEY;
-                if (i == 0) key = KEY.PL1_LEFT;
-                else if (i == 1) key = KEY.PL2_LEFT;
-                else if (i == 2) key = KEY.PL3_LEFT;
-                else key = KEY.PL4_LEFT;
-
-                addkey(key, false);
-            }
-
-            if (rm) {
-                let key: KEY;
-                if (i == 0) key = KEY.PL1_RIGHT;
-                else if (i == 1) key = KEY.PL2_RIGHT;
-                else if (i == 2) key = KEY.PL3_RIGHT;
-                else key = KEY.PL4_RIGHT;
-
-                addkey(key, true);
-            } else {
-                let key: KEY;
-                if (i == 0) key = KEY.PL1_RIGHT;
-                else if (i == 1) key = KEY.PL2_RIGHT;
-                else if (i == 2) key = KEY.PL3_RIGHT;
-                else key = KEY.PL4_RIGHT;
-
-                addkey(key, false);
-            }
-
-            if (jm) {
-                let key: KEY;
-                if (i == 0) key = KEY.PL1_JUMP;
-                else if (i == 1) key = KEY.PL2_JUMP;
-                else if (i == 2) key = KEY.PL3_JUMP;
-                else key = KEY.PL4_JUMP;
-
-                addkey(key, true);
-            } else {
-                let key: KEY;
-                if (i == 0) key = KEY.PL1_JUMP;
-                else if (i == 1) key = KEY.PL2_JUMP;
-                else if (i == 2) key = KEY.PL3_JUMP;
-                else key = KEY.PL4_JUMP;
-
-                addkey(key, false);
-            }
-        }
+    const map = get_ban_map();
+    const masks = local_bots.map((bot, slot) => {
+        if (ctx.ai[slot]) return bot.input(ctx.player, slot, map, cheats);
+        bot.reset();
+        return null;
+    });
+    for (let slot = 0; slot < JNB_MAX_PLAYERS; slot++) {
+        const mask = masks[slot];
+        if (mask === null) continue;
+        const player = ctx.player[slot];
+        player.action_left = (mask & INPUT_LEFT) !== 0;
+        player.action_right = (mask & INPUT_RIGHT) !== 0;
+        player.action_up = (mask & INPUT_UP) !== 0;
     }
 }
 
 function steer_players() {
-    cpu_move();
     update_player_actions();
+    cpu_move();
     local_sim().steer_players();
 }
 

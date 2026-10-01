@@ -285,6 +285,11 @@ The controls on a **QWERTY** keyboard are:
 In the menu, jump over the log to join and run off the right edge to start. The local game uses your selected level
 and the sound, gore and flies settings from **OPTIONS**.
 
+Computer bunnies plan short sequences with the same physics as human players. They anticipate movement, look for
+routes around platforms, use springs, and back up for another approach when stuck beneath a ledge. The 1-4 keys
+toggle them for bunnies already in the game, including bunnies with customized controls or gamepads. They remain
+exclusive to local play.
+
 ## License
 
 Jump 'n Bump is distributed under the GNU General Public License, version 2, or (at your option) any later version
