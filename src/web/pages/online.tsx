@@ -397,7 +397,14 @@ function Lobby({
                             <button
                                 ref={searchButton}
                                 type="button"
-                                className="gp-search-button"
+                                className="gp-button"
+                                style={{
+                                    width: gp(15),
+                                    height: gp(15),
+                                    boxSizing: 'content-box',
+                                    padding: 0,
+                                    flexShrink: 0,
+                                }}
                                 aria-label="Search rooms"
                                 aria-expanded={searching}
                                 aria-controls="room-search"
