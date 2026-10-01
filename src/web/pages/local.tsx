@@ -2,18 +2,20 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 import { Engine } from '../../engine';
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../../constants';
+import { DEFAULT_LEVEL } from '../../net/protocol';
+import { LevelDialog } from '../components/level-dialog';
 import { usePageMeta } from '../hooks/page-meta';
 import { useOnlineSettings } from '../hooks/online-settings';
 import { load_game_assets } from '../pixel/assets';
 import { Button, FullscreenHelp, Panel, Text, gp, pixel_variables } from '../pixel/components';
 import { Shell } from '../pixel/console';
+import { useKeyboardNav } from '../pixel/keyboard-nav';
 import '../pixel/pixel.css';
 
-const LEVEL_URL = '/levels/jumpbump.dat';
 // A stopped engine must finish before a quick return to /local resets its shared game state.
 let previousRun: Promise<unknown> = Promise.resolve();
 
-/** The original game for up to four players on one keyboard; it starts right away in the game's own menu. */
+/** Choose a level, then enter the original game's menu for up to four local players. */
 export default function Local() {
     usePageMeta({
         title: "Jump 'n Bump - Local game",
@@ -25,26 +27,43 @@ export default function Local() {
     const settingsRef = useRef(settings);
     settingsRef.current = settings;
     const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
+    const [stage, setStage] = useState<HTMLDivElement | null>(null);
+    const [level, setLevel] = useState<string | null>(null);
+    const [selected, setSelected] = useState(DEFAULT_LEVEL);
     const [running, setRunning] = useState(false);
     const [failed, setFailed] = useState(false);
     const [fontReady, setFontReady] = useState(false);
+    useKeyboardNav(!running || failed ? stage : null);
+
+    const chooseAgain = () => {
+        setLevel(null);
+        setRunning(false);
+        setFailed(false);
+    };
 
     useEffect(() => {
-        if (!loaded || !canvas) return;
+        let active = true;
+        // The picker graphics share the game's global datafile, so load them before any selected level.
+        load_game_assets().then(
+            () => active && setFontReady(true),
+            () => active && setFailed(true)
+        );
+        return () => {
+            active = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!loaded || !fontReady || !canvas || !level) return;
         let left = false;
         let engine: Engine | null = null;
+        const download = new AbortController();
 
-        // The lobby graphics share the global datafile with the game, so they are loaded before it starts
-        const assets = load_game_assets().then(
-            () => setFontReady(true),
-            () => {}
-        );
         Promise.all([
-            fetch(LEVEL_URL).then((response) => {
+            fetch(`/levels/${encodeURIComponent(level)}`, { signal: download.signal }).then((response) => {
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 return response.arrayBuffer();
             }),
-            assets,
             previousRun,
         ])
             .then(([dat]) => {
@@ -60,7 +79,7 @@ export default function Local() {
                     noflies: settings.noFlies,
                 });
                 engine.onExit(() => {
-                    if (!left) route('/');
+                    if (!left) chooseAgain();
                 });
                 previousRun = engine.run().catch((error) => {
                     console.error('could not run the local game', error);
@@ -69,18 +88,38 @@ export default function Local() {
                 setRunning(true);
             })
             .catch((error) => {
+                if (left) return;
                 console.error('could not start the local game', error);
-                if (!left) setFailed(true);
+                setFailed(true);
             });
 
         return () => {
             left = true;
+            download.abort();
             engine?.stop();
         };
-    }, [loaded, canvas]);
+    }, [loaded, fontReady, canvas, level]);
+
+    useEffect(() => {
+        if (!level || running || failed) return;
+        const cancel = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                chooseAgain();
+            }
+        };
+        window.addEventListener('keydown', cancel);
+        return () => window.removeEventListener('keydown', cancel);
+    }, [level, running, failed]);
 
     return (
-        <Shell width={SCREEN_WIDTH} height={SCREEN_HEIGHT} style={pixel_variables} fullscreenHelp={FullscreenHelp}>
+        <Shell
+            width={SCREEN_WIDTH}
+            height={SCREEN_HEIGHT}
+            style={pixel_variables}
+            stageRef={setStage}
+            fullscreenHelp={FullscreenHelp}
+        >
             <canvas
                 ref={setCanvas}
                 className="gp-abs"
@@ -92,6 +131,26 @@ export default function Local() {
                     visibility: running ? 'visible' : 'hidden',
                 }}
             />
+            {fontReady && !level && !failed && (
+                <LevelDialog
+                    selected={selected}
+                    onSelect={(next) => {
+                        setSelected(next.datFile);
+                        setLevel(next.datFile);
+                    }}
+                    onClose={() => route('/')}
+                />
+            )}
+            {fontReady && level && !running && !failed && (
+                <div
+                    className="gp-abs gp-col"
+                    role="status"
+                    style={{ inset: 0, alignItems: 'center', justifyContent: 'center' }}
+                >
+                    <Text text="LOADING LEVEL..." color="gold" />
+                    <Button label="CANCEL" onClick={chooseAgain} />
+                </div>
+            )}
             {failed && (
                 <div
                     className="gp-abs"
@@ -100,7 +159,7 @@ export default function Local() {
                     {fontReady ? (
                         <Panel className="gp-col" style={{ alignItems: 'center' }}>
                             <Text text="THE GAME COULD NOT BE LOADED" color="red" />
-                            <Button label="BACK" onClick={() => route('/')} />
+                            <Button label="BACK" onClick={chooseAgain} />
                         </Panel>
                     ) : (
                         <p>

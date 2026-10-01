@@ -1,5 +1,5 @@
 /**
- * The host's level picker: one scrolling grid of every level, filtered by a search box. The thumbnails are
+ * The local and online level picker: one scrolling grid of every level, filtered by a search box. The thumbnails are
  * separate images, so each one loads only when its card comes near the visible part of the grid.
  */
 import type { RefObject } from 'preact';
@@ -182,10 +182,7 @@ export function LevelDialog({
                                 key={level.datFile}
                                 level={level}
                                 selected={level.datFile === selected}
-                                onClick={() => {
-                                    onSelect(level);
-                                    onClose();
-                                }}
+                                onClick={() => onSelect(level)}
                             />
                         ))}
                         {filtered.length === 0 && (

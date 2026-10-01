@@ -57,7 +57,8 @@ Features of the online mode:
 - Local settings per player: controls, music and effects volume with separate mute switches, no gore, no flies.
 
 The original local game (up to four players on one keyboard, with computer players) is still available: **LOCAL**
-on the start page (`/local`) starts it right away in the game's own menu.
+on the start page (`/local`) opens the same searchable level picker as online mode. Choose a level to enter the
+game's own menu. Leaving that menu returns to the picker so you can choose another level.
 
 ## Installation
 
@@ -252,8 +253,8 @@ Music needs HTTPS or localhost; some browsers also require HTTPS for gamepads.
   full-screen copy for every step. Songs that are not playing and the sound effects outside a game no longer keep
   the audio device running.
 - The jumpnbump.net website pages (levels, about, secrets and the local game setup page) were replaced: credits and
-  secrets are in the **About** window of the start page, the local game starts directly, and the old addresses lead
-  to the start page.
+  secrets are in the **About** window of the start page, local play starts with a level picker, and the old
+  addresses lead to the start page.
 
 ## Development
 
@@ -278,9 +279,10 @@ The controls on a **QWERTY** keyboard are:
 
 - 1-4 switch the computer player for that bunny on or off during a game
 - F (SHIFT + f) toggles fullscreen
-- ESC ends the current game. When pressed from the menu screen it goes back to the start page.
+- ESC ends the current game. From the game's menu it returns to the level picker; close the picker to return to
+  the start page.
 
-In the menu, jump over the log to join and run off the right edge to start. The local game uses the original level
+In the menu, jump over the log to join and run off the right edge to start. The local game uses your selected level
 and the sound, gore and flies settings from **OPTIONS**.
 
 ## License

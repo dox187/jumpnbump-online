@@ -920,7 +920,10 @@ function Room({
             {showLevels && (
                 <LevelDialog
                     selected={room.level}
-                    onSelect={(selected) => net.send({ t: 'level', level: selected.datFile })}
+                    onSelect={(selected) => {
+                        net.send({ t: 'level', level: selected.datFile });
+                        setShowLevels(false);
+                    }}
                     onClose={() => setShowLevels(false)}
                 />
             )}
