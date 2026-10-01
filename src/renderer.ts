@@ -1,4 +1,4 @@
-// Changed by dox187 on 2026-09-29 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
+// Changed by dox187 on 2026-09-29 and 2026-10-01 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
 
 import { object_anims } from './animation';
 import { cheats } from './cheats';
@@ -193,7 +193,8 @@ export function draw_leftovers(page: number) {
 export function draw_score() {
     for (let c1 = 0; c1 < scores.pobs.length; c1++) {
         if (!scores.pobs[c1]) continue;
-        put_pob(0, scores.pobs[c1].x, scores.pobs[c1].y, scores.pobs[c1].image, scores.pobs[c1].pob_data, 1, mask_pic);
+        // Some custom levels mask the entire side panel. Their foreground must not cover the counters.
+        put_pob(0, scores.pobs[c1].x, scores.pobs[c1].y, scores.pobs[c1].image, scores.pobs[c1].pob_data, 0, null);
     }
 }
 

@@ -246,10 +246,10 @@ Music needs HTTPS or localhost; some browsers also require HTTPS for gamepads.
 - The physics were moved from `main.ts` into `src/sim/`; the local game uses the same code.
 - Respawning no longer hangs on levels that have fewer free spawn tiles than bunnies (for example `jumpmoon` with
   three or more players); the original searched forever.
-- The in-game score digits no longer pile up in memory, and a separate **mute music** option was added for the
-  online mode.
+- The in-game score digits no longer pile up in memory or disappear behind custom levels' foreground artwork.
+  A separate **mute music** option was added for the online mode.
 - Drawing a frame takes far less CPU time and memory, which matters most on phones: the screen is composed in a
-  reused buffer, the level's foreground mask is redrawn only where sprites are, and palette fades no longer keep a
+  reused buffer, foreground masking is applied while drawing sprites, and palette fades no longer keep a
   full-screen copy for every step. Songs that are not playing and the sound effects outside a game no longer keep
   the audio device running.
 - The jumpnbump.net website pages (levels, about, secrets and the local game setup page) were replaced: credits and

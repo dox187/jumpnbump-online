@@ -8,6 +8,8 @@ type Sprite = {
     height: number;
     data: Uint8ClampedArray;
     alphaColor?: number;
+    /** Score digits are drawn over the level's foreground. Other sprites remain behind it. */
+    masked?: boolean;
 };
 
 type PositionedSprite = Sprite & {
@@ -101,11 +103,11 @@ function rendered(image: ImageData): RenderedImage {
 }
 
 /**
- * Draws the paletted screen of the original game: background, sprites in the order they were put, and the mask
- * (the parts of the level in front of the bunnies) on top.
+ * Draws the paletted screen of the original game: background and sprites in the order they were put. The mask
+ * keeps the level's foreground in front of masked sprites; score digits can draw over it.
  *
- * Every frame starts from a cached copy of the background with the mask already applied, so the mask only has to
- * be drawn again where sprites were put. The frame buffer is reused, so drawing allocates nothing per frame.
+ * Every frame starts from a cached copy of the background with the mask already applied. Masked sprites skip
+ * foreground pixels while drawing. The frame buffer is reused, so drawing allocates nothing per frame.
  */
 export class PalettedRenderer {
     imageCache: PalettedCache = new PalettedCache();
@@ -116,8 +118,6 @@ export class PalettedRenderer {
     currentObjects: PositionedSprite[];
     palette: Uint8ClampedArray;
     frame: RenderedImage;
-    /** Screen areas the sprites of the current frame cover: x, y, width and height, four numbers each. */
-    private covered: number[] = [];
 
     constructor(width: number, height: number) {
         this.width = width;
@@ -223,8 +223,7 @@ export class PalettedRenderer {
         const frame = this.frame.pixels;
         const screenWidth = this.width;
         frame.set(this.#composed().pixels);
-        const covered = this.covered;
-        covered.length = 0;
+        const maskAlpha = this.#getRendered(this.mask).image.data;
 
         for (const object of this.currentObjects) {
             // Sprites are placed on whole pixels (all callers shift fixed-point positions or use integers)
@@ -239,28 +238,13 @@ export class PalettedRenderer {
             if (left >= right || top >= bottom) continue;
             const alpha = sprite.image.data;
             const pixels = sprite.pixels;
+            const masked = object.masked !== false;
             for (let y = top; y < bottom; y++) {
                 const source = (y - object.y) * width - object.x;
                 const target = y * screenWidth;
                 for (let x = left; x < right; x++) {
-                    if (alpha[(source + x) * 4 + 3] !== 0) frame[target + x] = pixels[source + x];
-                }
-            }
-            covered.push(left, top, right - left, bottom - top);
-        }
-
-        // The mask stays in front of every sprite
-        const mask = this.#getRendered(this.mask);
-        const maskAlpha = mask.image.data;
-        const maskPixels = mask.pixels;
-        for (let i = 0; i < covered.length; i += 4) {
-            const left = covered[i];
-            const right = left + covered[i + 2];
-            const bottom = covered[i + 1] + covered[i + 3];
-            for (let y = covered[i + 1]; y < bottom; y++) {
-                const row = y * screenWidth;
-                for (let p = row + left; p < row + right; p++) {
-                    if (maskAlpha[p * 4 + 3] !== 0) frame[p] = maskPixels[p];
+                    if (alpha[(source + x) * 4 + 3] !== 0 && (!masked || maskAlpha[(target + x) * 4 + 3] === 0))
+                        frame[target + x] = pixels[source + x];
                 }
             }
         }

@@ -1,4 +1,4 @@
-// Changed by dox187 on 2026-09-30 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
+// Changed by dox187 on 2026-09-30 and 2026-10-01 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
 
 import { assert } from '../c';
 import { get_gob, Gob } from '../assets';
@@ -60,6 +60,7 @@ export function put_pob(page: number, x: number, y: number, image: number, gob: 
         height: gob.height[image],
         width: gob.width[image],
         alphaColor: 0,
+        masked: use_mask !== 0,
     };
 
     const hs_x = gob.hs_x[image];
