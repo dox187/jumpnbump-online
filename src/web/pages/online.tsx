@@ -6,6 +6,8 @@ import { useGamepads } from '../hooks/gamepads';
 import { useLobbyActivity } from '../hooks/lobby-activity';
 import { prompt_app_install, useAppInstall } from '../hooks/app-install';
 import { InstallDialog } from '../components/install-dialog';
+import { AudioSettings } from '../components/audio-settings';
+import { dj_stop_preview } from '../../sdl/sound';
 import { Ping } from '../components/ping';
 import {
     OnlineSettings,
@@ -566,16 +568,7 @@ function OptionsDialog({
                         color="dim"
                     />
                     <div className="gp-col" style={{ gap: gp(2), paddingTop: gp(2) }}>
-                        <Checkbox
-                            label="Mute music"
-                            checked={settings.muteMusic}
-                            onChange={(muteMusic) => updateSettings({ muteMusic })}
-                        />
-                        <Checkbox
-                            label="Mute sound effects"
-                            checked={settings.muteEffects}
-                            onChange={(muteEffects) => updateSettings({ muteEffects })}
-                        />
+                        <AudioSettings settings={settings} updateSettings={updateSettings} />
                         <Checkbox
                             label="No gore"
                             checked={settings.noGore}
@@ -1000,6 +993,9 @@ export default function Online() {
     usePageMeta(onlinePageMeta);
     const state = useNet();
     const inactive = state.status === 'inactive';
+    useEffect(() => {
+        if (inactive) dj_stop_preview();
+    }, [inactive]);
     useLobbyActivity(!inactive && !state.room && !state.match);
     const [settings, updateSettings, loaded] = useOnlineSettings();
     const appInstall = useAppInstall();

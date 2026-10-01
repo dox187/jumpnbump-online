@@ -5,6 +5,7 @@
 import type { Gob } from '../../assets';
 import { preread_datafile, read_gob, read_pcx } from '../../data';
 import { init_font } from './font';
+import { dj_load_preview_audio } from '../../sdl/sound';
 
 export type Sprite = {
     canvas: HTMLCanvasElement;
@@ -64,6 +65,7 @@ export function load_game_assets(): Promise<GameAssets> {
             })
             .then((dat) => {
                 preread_datafile(dat);
+                dj_load_preview_audio();
                 const palette = new Uint8ClampedArray(768);
                 const pixels = read_pcx('menu.pcx', palette);
                 const menu = document.createElement('canvas');

@@ -26,6 +26,59 @@ function fit(area: Rect): Rect {
     return { x: area.x + (area.w - w) / 2, y: area.y + (area.h - h) / 2, w, h };
 }
 
+/** Utility buttons also remain available with a mouse or with movement touch controls switched off. */
+function plain_layout(
+    area: Rect,
+    width: number,
+    height: number,
+    dpr: number,
+    mobile: boolean,
+    safe: Insets
+): ShellLayout {
+    const fit_screen = (space: Rect) => {
+        if (mobile) return fit(space);
+        const available = Math.min((space.w * dpr) / SCREEN_WIDTH, (space.h * dpr) / SCREEN_HEIGHT);
+        const scale = Math.max(0, (available >= 1 ? Math.floor(available) : available) / dpr);
+        const w = SCREEN_WIDTH * scale,
+            h = SCREEN_HEIGHT * scale;
+        return { x: space.x + Math.round((space.w - w) / 2), y: space.y + Math.round((space.h - h) / 2), w, h };
+    };
+    const scale = Math.max(1, Math.round((mobile ? 2 : 1.5) * dpr)) / dpr;
+    const up = (css: number) => Math.ceil(css / scale - EPSILON);
+    const down = (css: number) => Math.floor(css / scale + EPSILON);
+    const size = up(mobile ? 48 : 36),
+        gap = up(8);
+    const left = up(area.x) + gap,
+        right = down(area.x + area.w) - gap;
+    const top = up(area.y) + gap;
+    let box = fit_screen(area);
+    let buttons: ShellLayout['buttons'];
+    const square = (x: number, y: number): Rect => ({ x, y, w: size, h: size });
+    if (area.x + area.w - box.x - box.w >= (size + 2 * gap) * scale && area.h >= (3 * size + 4 * gap) * scale) {
+        buttons = {
+            full: square(right - size, top),
+            music: square(right - size, top + size + gap),
+            effects: square(right - size, top + 2 * (size + gap)),
+        };
+    } else {
+        const header = (top + size + gap) * scale;
+        if (box.y < header) box = fit_screen({ ...area, y: header, h: Math.max(0, area.y + area.h - header) });
+        buttons = {
+            music: square(left, top),
+            effects: square(left + size + gap, top),
+            full: square(right - size, top),
+        };
+    }
+    return {
+        mode: 'plain',
+        safe,
+        box,
+        buttons,
+        pixel_scale: scale,
+        view: { w: Math.ceil(width / scale), h: Math.ceil(height / scale) },
+    };
+}
+
 export function screen_layout(
     width: number,
     height: number,
@@ -35,22 +88,7 @@ export function screen_layout(
     safe: Insets = NO_INSETS
 ): ShellLayout {
     const area = { x: safe.left, y: safe.top, w: width - safe.left - safe.right, h: height - safe.top - safe.bottom };
-    const plain = (box: Rect): ShellLayout => ({
-        mode: 'plain',
-        safe,
-        box,
-        pixel_scale: 1,
-        view: { w: 0, h: 0 },
-        buttons: {},
-    });
-    if (!mobile) {
-        const available = Math.min((width * dpr) / SCREEN_WIDTH, (height * dpr) / SCREEN_HEIGHT);
-        const scale = (available >= 1 ? Math.floor(available) : available) / dpr;
-        const w = SCREEN_WIDTH * scale,
-            h = SCREEN_HEIGHT * scale;
-        return plain({ x: Math.round((width - w) / 2), y: Math.round((height - h) / 2), w, h });
-    }
-    if (!touch) return plain(fit(area));
+    if (!mobile || !touch) return plain_layout(area, width, height, dpr, mobile, safe);
 
     // One art pixel is about two CSS pixels, always an integer number of physical pixels.
     const scale = Math.max(1, Math.round(2 * dpr)) / dpr;
@@ -151,7 +189,7 @@ export function screen_layout(
         }
     }
     // Only tiny embedded windows fail to fit seven usable targets with separate grip space.
-    if (!candidates.length) return plain(fit(area));
+    if (!candidates.length) return plain_layout(area, width, height, dpr, mobile, safe);
     const best = candidates.reduce((a, b) => (b.box.w > a.box.w + EPSILON ? b : a));
     return { ...best, safe, pixel_scale: scale, view: { w: Math.ceil(width / scale), h: Math.ceil(height / scale) } };
 }

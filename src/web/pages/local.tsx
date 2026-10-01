@@ -10,6 +10,8 @@ import { Shell } from '../pixel/console';
 import '../pixel/pixel.css';
 
 const LEVEL_URL = '/levels/jumpbump.dat';
+// A stopped engine must finish before a quick return to /local resets its shared game state.
+let previousRun: Promise<unknown> = Promise.resolve();
 
 /** The original game for up to four players on one keyboard; it starts right away in the game's own menu. */
 export default function Local() {
@@ -22,13 +24,13 @@ export default function Local() {
     const [settings, , loaded] = useOnlineSettings();
     const settingsRef = useRef(settings);
     settingsRef.current = settings;
-    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
     const [running, setRunning] = useState(false);
     const [failed, setFailed] = useState(false);
     const [fontReady, setFontReady] = useState(false);
 
     useEffect(() => {
-        if (!loaded) return;
+        if (!loaded || !canvas) return;
         let left = false;
         let engine: Engine | null = null;
 
@@ -43,10 +45,11 @@ export default function Local() {
                 return response.arrayBuffer();
             }),
             assets,
+            previousRun,
         ])
             .then(([dat]) => {
-                if (left || !canvasRef.current) return;
-                engine = new Engine(canvasRef.current);
+                if (left) return;
+                engine = new Engine(canvas);
                 const settings = settingsRef.current;
                 engine.init({
                     dat,
@@ -59,7 +62,10 @@ export default function Local() {
                 engine.onExit(() => {
                     if (!left) route('/');
                 });
-                engine.run();
+                previousRun = engine.run().catch((error) => {
+                    console.error('could not run the local game', error);
+                    if (!left) setFailed(true);
+                });
                 setRunning(true);
             })
             .catch((error) => {
@@ -71,12 +77,12 @@ export default function Local() {
             left = true;
             engine?.stop();
         };
-    }, [loaded]);
+    }, [loaded, canvas]);
 
     return (
         <Shell width={SCREEN_WIDTH} height={SCREEN_HEIGHT} style={pixel_variables} fullscreenHelp={FullscreenHelp}>
             <canvas
-                ref={canvasRef}
+                ref={setCanvas}
                 className="gp-abs"
                 style={{
                     left: 0,

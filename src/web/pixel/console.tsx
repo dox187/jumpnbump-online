@@ -396,9 +396,7 @@ export function Shell({
             className={`gp-root${layout.mode === 'plain' ? '' : ' gp-touch-shell'}`}
             style={{ '--control-pixel': `${layout.pixel_scale}px` } as JSX.CSSProperties}
         >
-            {layout.mode !== 'plain' && (
-                <TouchControls layout={layout} root={root} closeHelp={fullscreenIssue ? closeHelp : null} />
-            )}
+            <TouchControls layout={layout} root={root} closeHelp={fullscreenIssue ? closeHelp : null} />
             <div
                 className="gp-screen"
                 style={{ left: `${box.x}px`, top: `${box.y}px`, width: `${box.w}px`, height: `${box.h}px` }}

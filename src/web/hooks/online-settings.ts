@@ -8,9 +8,11 @@ export type OnlineSettings = {
     gamepadConfigs: Record<string, string[]>;
     muteMusic: boolean;
     muteEffects: boolean;
+    musicVolume: number;
+    effectsVolume: number;
     noGore: boolean;
     noFlies: boolean;
-    /** On-screen touch buttons on phones and tablets; null means on. Computers never show them. */
+    /** Movement touch buttons on phones and tablets; null means on. Audio/fullscreen buttons always show. */
     touch: boolean | null;
     /** A still forest outside matches; null means on for phones and tablets, off for computers. */
     batterySaver: boolean | null;
@@ -24,6 +26,8 @@ const DEFAULT_SETTINGS: OnlineSettings = {
     gamepadConfigs: {},
     muteMusic: false,
     muteEffects: false,
+    musicVolume: 100,
+    effectsVolume: 100,
     noGore: false,
     noFlies: false,
     touch: null,
@@ -33,10 +37,23 @@ const DEFAULT_SETTINGS: OnlineSettings = {
 function load(): OnlineSettings {
     try {
         const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
-        return { ...DEFAULT_SETTINGS, ...stored };
+        return {
+            ...DEFAULT_SETTINGS,
+            ...stored,
+            musicVolume: saved_volume(stored.musicVolume),
+            effectsVolume: saved_volume(stored.effectsVolume),
+        };
     } catch {
         return { ...DEFAULT_SETTINGS };
     }
+}
+
+function saved_volume(value: unknown) {
+    return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(100, Math.round(value))) : 100;
+}
+
+function apply_audio(settings: OnlineSettings) {
+    dj_set_audio_preferences(settings.muteMusic, settings.muteEffects, settings.musicVolume, settings.effectsVolume);
 }
 
 /** One copy of the settings for the whole page, so every component sees a change at once. */
@@ -46,7 +63,7 @@ const listeners = new Set<(settings: OnlineSettings) => void>();
 function update(patch: Partial<OnlineSettings>) {
     const next = { ...(current ?? load()), ...patch };
     current = next;
-    dj_set_audio_preferences(next.muteMusic, next.muteEffects);
+    apply_audio(next);
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     } catch {
@@ -84,7 +101,10 @@ export function useOnlineSettings(): [OnlineSettings, (patch: Partial<OnlineSett
     const [loaded, setLoaded] = useState(current !== null);
 
     useEffect(() => {
-        if (!current) current = load();
+        if (!current) {
+            current = load();
+            apply_audio(current);
+        }
         setSettings(current);
         setLoaded(true);
         listeners.add(setSettings);

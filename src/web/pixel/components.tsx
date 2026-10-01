@@ -403,10 +403,12 @@ export function Checkbox({
     checked,
     onChange,
     label,
+    ariaLabel,
 }: {
     checked: boolean;
     onChange: (checked: boolean) => void;
     label: string;
+    ariaLabel?: string;
 }) {
     const [hot, setHot] = useState(false);
     return (
@@ -414,6 +416,8 @@ export function Checkbox({
             type="button"
             role="checkbox"
             aria-checked={checked}
+            aria-label={ariaLabel}
+            title={ariaLabel}
             className="gp-checkbox"
             onClick={() => onChange(!checked)}
             onMouseEnter={() => setHot(true)}

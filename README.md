@@ -54,7 +54,7 @@ Features of the online mode:
 - All menus work with the keyboard (arrow keys, Enter, Escape) as well as the mouse. Gamepads work without any
   setup, in the menus and in the game.
 - [Phones and tablets](#phones-and-tablets): portrait and landscape layouts with touch controls outside the game.
-- Local settings per player: controls, mute music or sound effects, no gore, no flies.
+- Local settings per player: controls, music and effects volume with separate mute switches, no gore, no flies.
 
 The original local game (up to four players on one keyboard, with computer players) is still available: **LOCAL**
 on the start page (`/local`) starts it right away in the game's own menu.
@@ -197,17 +197,21 @@ original proportions and use the largest screen area that fits alongside the con
   also offers **Add to Home screen > Install** in its menu; Samsung Internet has an install icon in the address bar.
   The button is hidden when the game runs as an app. Installation needs HTTPS (or localhost).
 - **Music and sound:** the music-note and speaker buttons toggle music and sound effects independently, even
-  during a match. A slash marks a muted channel; the game remembers these preferences.
+  during a match. A slash marks a muted channel. **OPTIONS** has separate volume sliders, with mute checkboxes
+  on their left. Muting greys out the slider and keeps its value; unmuting during a game restores that level.
+  Focus a slider with the arrow keys or adjust it to hear a preview; Up/Down moves between settings and Left/Right
+  changes the volume. These preferences are saved in the browser. Fly buzzing plays at half its former volume.
+  The music, sound and fullscreen buttons are also available on computers and with movement touch buttons off.
 - **Screen fit:** the game keeps its original aspect ratio, and the translucent controls share one consistent
   pixel grid. Both stay within the safe area around camera cutouts and home indicators, including after rotation
   or fullscreen changes.
 - **Other controls:** keyboards and gamepads work alongside touch. Turn touch buttons off under **OPTIONS** to
-  give the game the entire available area. Computers show no touch controls.
+  leave more space for the game. Computers show only the audio and fullscreen buttons.
 - **Battery and CPU:** frame drawing and audio were optimized for phones on 2026-10-01. In an emulated phone
   playing a two-player match with the CPU slowed down four times, the browser's main thread went from about 22%
   to about 6% busy. Browser buffer memory during a match also went from a 50-100 MB sawtooth to a steady 4 MB.
-  Only the song that is playing and the sound effects keep the audio device running, and nothing does outside a
-  game. These figures come from emulation, not from a real phone.
+  Only the song that is playing and the sound effects keep the audio device running; outside a game it sleeps
+  unless a settings preview is playing. These figures come from emulation, not from a real phone.
 - **Battery saver:** on by default on phones and tablets, and available on computers under **OPTIONS**. Outside
   matches the forest then stands still: no butterflies or flies, the bunnies wait at their spots, and a room is
   drawn again only when somebody picks a bunny, sits out, joins or leaves. In the same emulated phone, the browser

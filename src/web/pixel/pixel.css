@@ -133,6 +133,68 @@
     gap: calc(var(--px) * 3);
 }
 
+.gp-volume-slider {
+    appearance: none;
+    -webkit-appearance: none;
+    flex: 1;
+    min-width: 0;
+    width: 0;
+    height: calc(var(--px) * 19);
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+    touch-action: none;
+}
+
+.gp-volume-slider::-webkit-slider-runnable-track {
+    height: calc(var(--px) * 5);
+    border: var(--px) solid #966535;
+    background: #281609;
+}
+
+.gp-volume-slider::-moz-range-track {
+    height: calc(var(--px) * 3);
+    border: var(--px) solid #966535;
+    background: #281609;
+}
+
+.gp-volume-slider::-webkit-slider-thumb {
+    appearance: none;
+    -webkit-appearance: none;
+    width: calc(var(--px) * 9);
+    height: calc(var(--px) * 13);
+    margin-top: calc(var(--px) * -5);
+    border: calc(var(--px) * 2) solid #c58e48;
+    border-radius: 0;
+    background: #72451f;
+}
+
+.gp-volume-slider::-moz-range-thumb {
+    width: calc(var(--px) * 5);
+    height: calc(var(--px) * 9);
+    border: calc(var(--px) * 2) solid #c58e48;
+    border-radius: 0;
+    background: #72451f;
+}
+
+.gp-volume-slider:focus-visible {
+    outline: var(--px) solid #ffd648;
+    outline-offset: var(--px);
+}
+
+.gp-volume-slider:disabled {
+    filter: grayscale(1);
+    opacity: 0.45;
+    cursor: default;
+}
+
+.gp-volume-value {
+    display: flex;
+    justify-content: flex-end;
+    width: calc(var(--px) * 34);
+    flex-shrink: 0;
+}
+
 /* Frames: 9-slice pixel images generated in components.tsx */
 
 .gp-panel {

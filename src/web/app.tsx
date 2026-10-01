@@ -13,6 +13,7 @@ import {
 } from 'preact-iso';
 import { PageMeta } from './hooks/page-meta';
 import { init_app_install } from './hooks/app-install';
+import { dj_init_audio_gestures } from '../sdl/sound';
 
 import './app.css';
 
@@ -42,6 +43,7 @@ function App() {
 
 if (typeof window !== 'undefined') {
     init_app_install();
+    dj_init_audio_gestures();
     hydrate(<App />, document.getElementById('app'));
 }
 

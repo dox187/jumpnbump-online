@@ -1,7 +1,7 @@
 // Changed by dox187 on 2026-09-29, 2026-09-30 and 2026-10-01 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
 
 import { read_data } from '../data';
-import { MAX_VOLUME, MOD, SFX } from '../constants';
+import { MAX_VOLUME, MOD, SFX, SFX_FREQ } from '../constants';
 import { Mod } from '@webtrack/mod';
 /* @ts-ignore - Special static import with Vite */
 import audioWorkletUrl from '@webtrack/mod/dist/mod-processor.js?url';
@@ -13,7 +13,7 @@ type SoundConfig = { loop: boolean; default_freq: number };
 const soundSettings: SoundConfig[] = [];
 const sounds: ArrayBuffer[] = [];
 /** A sound effect that is playing. */
-type Voice = { source: AudioBufferSourceNode; gain: GainNode };
+type Voice = { source: AudioBufferSourceNode; gain: GainNode; scale: number; preview?: boolean };
 const channels: Voice[][] = [];
 /** Every sound effect that is playing, also those on no channel (-1). */
 const voices = new Set<Voice>();
@@ -37,7 +37,26 @@ let sfx_context: AudioContext | null = null;
 let sfx_master: GainNode | null = null;
 /** Set while the effects context is being suspended after a game; the next sound resumes it once that is done. */
 let sfx_suspending: Promise<void> | null = null;
+let sfx_resuming: Promise<void> | null = null;
+let effects_wanted = false;
+let game_audio = false;
+let audio_generation = 0;
+const channel_generations: number[] = [];
+const channel_volumes: number[] = [];
+let music_volume = 100;
+let effects_volume = 100;
+let gestures_initialized = false;
 const track_volumes = new WeakMap<Mod, number>();
+const loading = new WeakMap<Mod, Promise<void>>();
+
+export type AudioPreview = 'music' | 'effects';
+let preview: AudioPreview | null = null;
+let preview_music: Uint8Array | null = null;
+let preview_effects: AudioBuffer[] = [];
+let preview_samples: ArrayBuffer[] = [];
+let preview_track: Mod | null = null;
+let preview_timer = 0;
+let preview_generation = 0;
 
 function set_track_volume(track: Mod, volume: number) {
     track.setVolume(volume);
@@ -50,33 +69,66 @@ function set_track_volume(track: Mod, volume: number) {
 }
 
 /** Apply saved audio switches immediately, including looping effects and songs already playing. */
-export function dj_set_audio_preferences(mute_music: boolean, mute_effects: boolean) {
+export function dj_set_audio_preferences(
+    mute_music: boolean,
+    mute_effects: boolean,
+    music = music_volume,
+    effects = effects_volume
+) {
+    music_volume = Math.max(0, Math.min(100, music));
+    effects_volume = Math.max(0, Math.min(100, effects));
     context.info.no_music = mute_music;
     context.info.music_no_sound = mute_effects;
     context.info.no_sound = mute_music && mute_effects;
-    if (sfx_master) sfx_master.gain.value = mute_effects ? 0 : 1;
+    if (sfx_master) sfx_master.gain.value = mute_effects ? 0 : effects_volume / 100;
     for (const track of tracks) {
-        if (track) set_track_volume(track, mute_music ? 0 : (track_volumes.get(track) ?? 1));
+        if (track) set_track_volume(track, mute_music ? 0 : ((track_volumes.get(track) ?? 1) * music_volume) / 100);
     }
+    if (preview_track) set_track_volume(preview_track, mute_music ? 0 : (30 / MAX_VOLUME) * (music_volume / 100));
+    if ((preview === 'music' && mute_music) || (preview === 'effects' && mute_effects)) dj_stop_preview();
 }
 
 function sfx_audio(): AudioContext | null {
     if (!sfx_context) {
         try {
-            sfx_context = new AudioContext();
+            sfx_context = new AudioContext({ latencyHint: 'interactive' });
             sfx_master = sfx_context.createGain();
-            sfx_master.gain.value = context.info.music_no_sound || context.info.no_sound ? 0 : 1;
+            sfx_master.gain.value = context.info.music_no_sound || context.info.no_sound ? 0 : effects_volume / 100;
             sfx_master.connect(sfx_context.destination);
         } catch {
             return null;
         }
     }
-    if (sfx_suspending) {
-        const audio = sfx_context;
-        sfx_suspending.then(() => audio.resume()).catch(() => {});
-        sfx_suspending = null;
-    } else if (sfx_context.state === 'suspended') sfx_context.resume().catch(() => {});
     return sfx_context;
+}
+
+function resume_effects(): Promise<void> {
+    effects_wanted = true;
+    const audio = sfx_audio();
+    if (!audio || audio.state === 'closed') return Promise.resolve();
+    if (sfx_resuming) return sfx_resuming;
+    const resume = () => audio.resume();
+    // Call resume synchronously during a gesture whenever there is no pending suspend.
+    const done = sfx_suspending ? sfx_suspending.then(resume) : resume();
+    sfx_resuming = done
+        .catch(() => {})
+        .finally(() => {
+            sfx_resuming = null;
+            // Leaving the game or hiding the app also wins over a resume that was still waiting on the device.
+            if (!effects_wanted || document.hidden) suspend_effects();
+        });
+    return sfx_resuming;
+}
+
+function suspend_effects() {
+    effects_wanted = false;
+    if (!sfx_context || sfx_suspending) return;
+    sfx_suspending = sfx_context
+        .suspend()
+        .catch(() => {})
+        .finally(() => {
+            sfx_suspending = null;
+        });
 }
 
 /** Decoded samples (signed 8-bit PCM) at the sound's own rate; other pitches play them faster or slower. */
@@ -95,12 +147,13 @@ function sfx_buffer(audio: AudioContext, sfx_num: number, rate: number) {
 }
 
 export function dj_set_sfx_channel_volume(channel_num: number, volume: number) {
+    channel_volumes[channel_num] = volume;
     if (!channels[channel_num]) {
         return;
     }
 
     for (const voice of channels[channel_num]) {
-        voice.gain.gain.value = volume / MAX_VOLUME;
+        voice.gain.gain.value = (volume / MAX_VOLUME) * voice.scale;
     }
 }
 
@@ -121,14 +174,49 @@ export function dj_play_sfx(
     if (!audio) return;
     const settings = dj_get_sfx_settings(sfx_num);
     const rate = limitToWebSafeSampleRate(settings.default_freq);
+    const buffer = sfx_buffer(audio, sfx_num, rate);
+    const requested = performance.now();
+    const generation = audio_generation;
+    const channel_generation = channel_generations[channel] ?? 0;
+    if (channel !== -1) channel_volumes[channel] = volume;
+    const play = () => {
+        if (generation !== audio_generation || document.hidden || audio.state !== 'running') return;
+        if (channel !== -1 && channel_generation !== (channel_generations[channel] ?? 0)) return;
+        // An interrupted device can take hundreds of milliseconds to resume. Never replay old jumps or deaths.
+        if (!settings.loop && performance.now() - requested > 100) return;
+        start_voice(
+            audio,
+            buffer,
+            freq / rate,
+            settings.loop,
+            channel === -1 ? volume : channel_volumes[channel],
+            channel,
+            sfx_num === SFX.FLY ? 0.5 : 1
+        );
+    };
+    if (document.hidden) return;
+    if (audio.state === 'running' && !sfx_suspending) play();
+    else void resume_effects().then(play);
+}
+
+function start_voice(
+    audio: AudioContext,
+    buffer: AudioBuffer,
+    rate: number,
+    loop: boolean,
+    volume: number,
+    channel = -1,
+    scale = 1,
+    is_preview = false
+) {
     const source = audio.createBufferSource();
-    source.buffer = sfx_buffer(audio, sfx_num, rate);
-    source.loop = settings.loop;
-    source.playbackRate.value = Math.max(0.05, freq / rate);
+    source.buffer = buffer;
+    source.loop = loop;
+    source.playbackRate.value = Math.max(0.05, rate);
     const gain = audio.createGain();
-    gain.gain.value = volume / MAX_VOLUME;
+    gain.gain.value = (volume / MAX_VOLUME) * scale;
     source.connect(gain).connect(sfx_master!);
-    const voice: Voice = { source, gain };
+    const voice: Voice = { source, gain, scale, preview: is_preview };
     voices.add(voice);
     source.onended = () => {
         voices.delete(voice);
@@ -202,17 +290,37 @@ export function dj_start_mod() {
     const track = getCurrentTrack();
     if (track === null) return;
     if (wanted.get(track)) {
-        if (track.context.state === 'suspended') track.context.resume().catch(() => {});
+        if (track.context.state !== 'running') {
+            void (suspending.get(track) ?? Promise.resolve())
+                .then(() => {
+                    if (wanted.get(track) && !document.hidden) return track.context.resume();
+                })
+                .then(() => {
+                    if (document.hidden) suspend_track(track);
+                })
+                .catch(() => {});
+        }
         return;
     }
     // Keep the song's position while muted, so toggling music does not restart it.
-    set_track_volume(track, context.info.no_music || context.info.no_sound ? 0 : (track_volumes.get(track) ?? 1));
+    set_track_volume(
+        track,
+        context.info.no_music || context.info.no_sound ? 0 : ((track_volumes.get(track) ?? 1) * music_volume) / 100
+    );
+    start_track(track);
+}
+
+function start_track(track: Mod) {
     wanted.set(track, true);
-    (suspending.get(track) ?? Promise.resolve())
-        .then(() => track.play())
+    Promise.all([suspending.get(track), loading.get(track)])
+        .then(() => {
+            if (document.hidden) wanted.set(track, false);
+            if (wanted.get(track)) return track.play();
+        })
         .then(
             () => {
                 if (!wanted.get(track)) stop_track(track);
+                else if (document.hidden) suspend_track(track);
             },
             (e: unknown) => {
                 wanted.set(track, false);
@@ -226,23 +334,23 @@ export function dj_stop_mod() {
 }
 
 export function dj_init() {
+    game_audio = true;
+    dj_stop_preview();
     dj_set_audio_preferences(
         context.info.no_music || context.info.no_sound,
         context.info.music_no_sound || context.info.no_sound
     );
-    window.addEventListener('touchstart', handleUserGesture);
-    window.addEventListener('mousedown', handleUserGesture);
-    window.addEventListener('keydown', handleKeyboardUserGesture);
+    dj_init_audio_gestures();
+    void resume_effects();
 }
 
 export function dj_deinit() {
-    window.removeEventListener('touchstart', handleUserGesture);
-    window.removeEventListener('mousedown', handleUserGesture);
-    window.removeEventListener('keydown', handleKeyboardUserGesture);
+    game_audio = false;
+    audio_generation++;
     // Nothing plays outside the game, so the effects context sleeps until the next sound
     for (const voice of voices) stop_voice(voice);
     channels.length = 0;
-    if (sfx_context && !sfx_suspending) sfx_suspending = sfx_context.suspend().catch(() => {});
+    suspend_effects();
 }
 
 /** Stops the music: every track, also the ones that were faded out and left running. */
@@ -263,7 +371,10 @@ export function dj_set_mod_volume(volume: number) {
         return;
     }
     track_volumes.set(track, volume / MAX_VOLUME);
-    set_track_volume(track, context.info.no_music || context.info.no_sound ? 0 : volume / MAX_VOLUME);
+    set_track_volume(
+        track,
+        context.info.no_music || context.info.no_sound ? 0 : (volume / MAX_VOLUME) * (music_volume / 100)
+    );
 }
 
 export function dj_set_sfx_volume(volume: number) {}
@@ -282,6 +393,7 @@ function stop_voice(voice: Voice) {
 }
 
 export function dj_stop_sfx_channel(channel_num: number) {
+    channel_generations[channel_num] = (channel_generations[channel_num] ?? 0) + 1;
     if (!channels[channel_num]) {
         return;
     }
@@ -291,15 +403,20 @@ export function dj_stop_sfx_channel(channel_num: number) {
 }
 
 export function dj_load_sfx(filename: string, sfx_num: SFX) {
-    const src = read_data(filename);
+    sounds[sfx_num] = sample_data(read_data(filename));
+    // Each level may bring its own sounds. Decode before the first jump, not on the input frame.
+    sfx_buffers.delete(sfx_num);
+    const audio = sfx_audio();
+    if (audio) sfx_buffer(audio, sfx_num, limitToWebSafeSampleRate(dj_get_sfx_settings(sfx_num).default_freq));
+}
+
+function sample_data(src: Uint8Array): ArrayBuffer {
     const dest = new Uint8Array(src.byteLength / 2);
     for (let i = 0; i < dest.byteLength; i++) {
         const temp = src[i * 2] + (src[i * 2 + 1] << 8);
         dest[i] = temp;
     }
-    sounds[sfx_num] = dest.buffer;
-    // Each level may bring its own sounds
-    sfx_buffers.delete(sfx_num);
+    return dest.buffer;
 }
 
 /** The MOD player needs an AudioWorklet, which browsers only offer on HTTPS pages and on localhost. */
@@ -320,7 +437,11 @@ export function dj_load_mod(filename: string, mod_num: MOD) {
         old.context.close().catch(() => {});
     }
     try {
-        const track = new Mod({ src, audioWorkletUrl, wasmUrl });
+        const track = new Mod({ audioWorkletUrl, wasmUrl });
+        loading.set(
+            track,
+            track.loadData(src).catch((error) => console.info('Music could not load:', error))
+        );
         tracks[mod_num] = track;
         // All songs are loaded up front but only one plays; dj_start_mod resumes its context
         suspend_track(track);
@@ -329,23 +450,103 @@ export function dj_load_mod(filename: string, mod_num: MOD) {
     }
 }
 
-function handleUserGesture(event: Event) {
-    if (event.isTrusted) {
-        // Phones only let audio start from a tap or a key press
-        sfx_audio();
-        dj_start_mod();
-        window.removeEventListener(event.type, handleUserGesture);
+/** Unlock on real input before asynchronous level loading; keep recovering after mobile audio interruptions. */
+export function dj_init_audio_gestures() {
+    if (gestures_initialized) return;
+    gestures_initialized = true;
+    const gesture = (event: Event) => {
+        if (!event.isTrusted) return;
+        if (!sfx_context || game_audio || preview === 'effects') {
+            void resume_effects().then(() => {
+                if (!game_audio && preview !== 'effects') suspend_effects();
+            });
+        }
+        if (game_audio) dj_start_mod();
+        if (preview === 'music' && preview_track) preview_track.context.resume().catch(() => {});
+    };
+    for (const type of ['pointerdown', 'pointerup', 'touchend', 'keydown']) {
+        window.addEventListener(type, gesture, { capture: true, passive: true });
+    }
+    window.addEventListener('blur', dj_stop_preview);
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            audio_generation++;
+            dj_stop_preview();
+            for (const voice of voices) if (!voice.source.loop) stop_voice(voice);
+            suspend_effects();
+            // Explicitly suspend active music too: mobile WebKit may otherwise return with an interrupted clock.
+            for (const track of tracks) if (track && wanted.get(track)) suspend_track(track);
+        } else if (game_audio) {
+            void resume_effects();
+            dj_start_mod();
+        }
+    });
+}
+
+/** Copy the original menu's samples while its datafile is loaded; previews never replace a match's datafile. */
+export function dj_load_preview_audio() {
+    preview_music = read_data('jump.mod').slice();
+    preview_samples = ['jump.smp', 'spring.smp', 'death.smp'].map((file) => sample_data(read_data(file)));
+}
+
+export function dj_preview_audio(kind: AudioPreview) {
+    if (preview === kind || game_audio || document.hidden) return;
+    dj_stop_preview();
+    if (kind === 'music' ? context.info.no_music : context.info.music_no_sound) return;
+    preview = kind;
+    const generation = preview_generation;
+    if (kind === 'music') {
+        if (!music_supported() || !preview_music) return;
+        if (!preview_track) {
+            preview_track = new Mod({ audioWorkletUrl, wasmUrl });
+            loading.set(
+                preview_track,
+                preview_track.loadData(preview_music).catch(() => {})
+            );
+        }
+        set_track_volume(preview_track, (30 / MAX_VOLUME) * (music_volume / 100));
+        // Resume inside the focus/input gesture, before waiting for worklet loading.
+        preview_track.context.resume().catch(() => {});
+        start_track(preview_track);
+    } else {
+        const audio = sfx_audio();
+        if (!audio) return;
+        if (!preview_effects.length) {
+            preview_effects = preview_samples.map((sample) => {
+                const data = new Int8Array(sample);
+                const buffer = audio.createBuffer(1, data.length, SFX_FREQ.JUMP);
+                buffer.getChannelData(0).set(Float32Array.from(data, (value) => value / 128));
+                return buffer;
+            });
+        }
+        let index = 0;
+        const play = () => {
+            if (
+                generation !== preview_generation ||
+                preview !== 'effects' ||
+                audio.state !== 'running' ||
+                !preview_effects.length
+            )
+                return;
+            start_voice(audio, preview_effects[index++ % preview_effects.length], 1, false, MAX_VOLUME, -1, 1, true);
+        };
+        void resume_effects().then(play);
+        preview_timer = window.setInterval(play, 800);
     }
 }
 
-function handleKeyboardUserGesture(event: KeyboardEvent) {
-    sfx_audio();
-    dj_start_mod();
-    const isArrowKeys =
-        event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'ArrowLeft' || event.key === 'ArrowRight';
+export function dj_stop_preview() {
+    preview = null;
+    preview_generation++;
+    clearInterval(preview_timer);
+    if (preview_track) stop_track(preview_track);
+    for (const voice of voices) if (voice.preview) stop_voice(voice);
+    if (!game_audio) suspend_effects();
+}
 
-    // Ignore arrow keys, as they are not considered user gestures in Firefox
-    if (!isArrowKeys && event.isTrusted) {
-        window.removeEventListener(event.type, handleKeyboardUserGesture);
-    }
+export function dj_dispose_preview() {
+    dj_stop_preview();
+    const track = preview_track;
+    preview_track = null;
+    if (track) void (loading.get(track) ?? Promise.resolve()).finally(() => track.context.close().catch(() => {}));
 }
