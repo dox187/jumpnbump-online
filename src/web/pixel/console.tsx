@@ -3,7 +3,7 @@
  * Mobile controls keep comfortable thumb positions, clear utility corners and hardware-safe margins.
  */
 import type { ComponentChildren, ComponentType, JSX, Ref } from 'preact';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { touch_input } from '../../extra-input';
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../../constants';
 import { BOT_MODE_NAMES, type BotMode } from '../../local-controls';
@@ -340,28 +340,27 @@ function ControlArtwork({
     muted: Set<ButtonId>;
     botModes?: readonly BotMode[];
 }) {
-    const ref = useRef<HTMLCanvasElement>(null);
-    useLayoutEffect(() => {
-        const canvas = ref.current;
-        if (!canvas) return;
-        if (canvas.width !== layout.view.w) canvas.width = layout.view.w;
-        if (canvas.height !== layout.view.h) canvas.height = layout.view.h;
-        // Present one complete bitmap so scene changes cannot leave partially repainted controls.
-        const artwork = document.createElement('canvas');
-        artwork.width = layout.view.w;
-        artwork.height = layout.view.h;
-        draw_touch_controls(artwork.getContext('2d')!, layout, held, muted, botModes);
-        const context = canvas.getContext('2d')!;
-        context.clearRect(0, 0, canvas.width, canvas.height);
-        context.drawImage(artwork, 0, 0);
+    const artwork = useMemo(() => {
+        const canvas = document.createElement('canvas');
+        canvas.width = layout.view.w;
+        canvas.height = layout.view.h;
+        draw_touch_controls(canvas.getContext('2d')!, layout, held, muted, botModes);
+        // A static image keeps the complete control layer visible while the game canvas repaints.
+        return canvas.toDataURL();
     }, [layout, held, muted, botModes]);
     return (
-        <canvas
-            ref={ref}
+        <img
+            src={artwork}
+            alt=""
             className="gp-controls-art"
             aria-hidden="true"
             // A transform avoids CSS layout rounding the scaled height to 1/64 px and changing pixel rows.
-            style={{ width: layout.view.w, height: layout.view.h, transform: `scale(${layout.pixel_scale})` }}
+            style={{
+                width: layout.view.w,
+                height: layout.view.h,
+                transform: `scale(${layout.pixel_scale})`,
+                imageRendering: 'pixelated',
+            }}
         />
     );
 }
