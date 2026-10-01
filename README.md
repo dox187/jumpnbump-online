@@ -284,7 +284,8 @@ The controls on a **QWERTY** keyboard are:
   the start page.
 
 In the menu, jump over the log to join and run off the right edge to start. The local game uses your selected level
-and the sound, gore and flies settings from **OPTIONS**.
+and the sound, gore and flies settings from **OPTIONS**. Each local match starts with a three-second countdown;
+bunnies wait for **GO!** before moving. The score-limit caption disappears with the starting signal.
 
 Choose **5, 10, 25, 50 or 100** points in the local lobby, or **NONE** for unlimited play. The default is 10.
 The first bunny to reach the target ends the match automatically. The final bump replays at 2.5 times slower

@@ -77,7 +77,8 @@ import { GameInputDevice } from 'inputs';
 import { INPUT_LEFT, INPUT_RIGHT, INPUT_UP, Sim, create_state } from './sim/sim';
 import { LocalBot } from './local-bot';
 import { LocalReplay, REPLAY_FRAME_MS, REPLAY_HOLD_MS } from './local-replay';
-import { get_local_controls, set_local_phase } from './local-controls';
+import { get_local_controls, set_local_countdown, set_local_phase } from './local-controls';
+import { COUNTDOWN_FRAMES } from './net/protocol';
 import { local_fx, show_score } from './fx';
 
 const pal = new Uint8ClampedArray(768);
@@ -123,6 +124,8 @@ async function game_loop() {
     let fade_flag = 0;
     let update_palette = 0;
     let mod_fade_direction;
+    let countdown_frames = COUNTDOWN_FRAMES;
+    const go_frames = 40;
 
     const rabbit_gobs = get_gob('rabbit');
 
@@ -171,11 +174,18 @@ async function game_loop() {
             }
 
             // Keep the final scores fixed during the replay and the fade into the result screen.
-            if (!end_loop_flag) steer_players(sim.end_score > 0 ? replay : undefined);
+            if (!end_loop_flag && countdown_frames <= 0) steer_players(sim.end_score > 0 ? replay : undefined);
 
             dj_mix();
 
-            if (!end_loop_flag) collision_check();
+            if (!end_loop_flag && countdown_frames <= 0) collision_check();
+
+            if (!end_loop_flag && countdown_frames > -go_frames) {
+                countdown_frames--;
+                set_local_countdown(
+                    countdown_frames > 0 ? Math.ceil(countdown_frames / 60) : countdown_frames > -go_frames ? 0 : null
+                );
+            }
 
             dj_mix();
 

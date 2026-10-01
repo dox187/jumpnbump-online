@@ -150,7 +150,7 @@ export default function Local() {
                     visibility: running ? 'visible' : 'hidden',
                 }}
             />
-            {botControls && (controls.phase === 'lobby' || !notice) && (
+            {botControls && (controls.phase === 'lobby' || (controls.countdown !== null && !notice)) && (
                 <div
                     className="gp-abs"
                     style={{
@@ -175,6 +175,21 @@ export default function Local() {
                             />
                         </div>
                     )}
+                </div>
+            )}
+            {running && !failed && controls.phase === 'playing' && controls.countdown !== null && (
+                <div
+                    className="gp-abs pointer-events-none"
+                    style={{ left: 0, right: gp(48), top: gp(96), display: 'flex', justifyContent: 'center' }}
+                >
+                    <Text
+                        key={controls.countdown}
+                        text={controls.countdown > 0 ? String(controls.countdown) : 'GO!'}
+                        color={controls.countdown > 0 ? 'gold' : 'green'}
+                        size={4}
+                        shadow
+                        className="gp-pop"
+                    />
                 </div>
             )}
             {botControls && notice && (

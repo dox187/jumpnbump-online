@@ -1,5 +1,5 @@
 import ctx from './context';
-import { DEFAULT_END_SCORE, END_SCORE_OPTIONS } from './net/protocol';
+import { COUNTDOWN_FRAMES, DEFAULT_END_SCORE, END_SCORE_OPTIONS } from './net/protocol';
 
 export type BotDifficulty = 1 | 2 | 3;
 export type BotMode = 0 | BotDifficulty;
@@ -12,10 +12,17 @@ type LocalControls = {
     phase: LocalPhase;
     modes: readonly BotMode[];
     endScore: number;
+    countdown: number | null;
     change: { slot: number; mode: BotMode } | null;
 };
 
-let state: LocalControls = { phase: 'inactive', modes: [0, 0, 0, 0], endScore: DEFAULT_END_SCORE, change: null };
+let state: LocalControls = {
+    phase: 'inactive',
+    modes: [0, 0, 0, 0],
+    endScore: DEFAULT_END_SCORE,
+    countdown: null,
+    change: null,
+};
 const listeners = new Set<() => void>();
 
 export const get_local_controls = () => state;
@@ -28,7 +35,20 @@ export function subscribe_local_controls(listener: () => void) {
 }
 
 export function set_local_phase(phase: LocalPhase) {
-    state = { ...state, phase, modes: ctx.ai.slice(), change: null };
+    state = {
+        ...state,
+        phase,
+        modes: ctx.ai.slice(),
+        countdown: phase === 'playing' ? Math.ceil(COUNTDOWN_FRAMES / 60) : null,
+        change: null,
+    };
+    for (const listener of listeners) listener();
+}
+
+/** The local engine's tick clock owns both the starting signal and its score-limit caption. */
+export function set_local_countdown(countdown: number | null) {
+    if (state.phase !== 'playing' || state.countdown === countdown) return;
+    state = { ...state, countdown };
     for (const listener of listeners) listener();
 }
 
