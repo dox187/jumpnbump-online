@@ -1150,6 +1150,7 @@ export default function Online() {
                                     label={state.me?.name ?? settings.name}
                                     onClick={() => setDialog('name')}
                                     title="Change your name"
+                                    maxTextWidth={75}
                                 />
                             </div>
                         </At>

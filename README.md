@@ -107,13 +107,13 @@ npm start       # serves everything on http://0.0.0.0:8080
 
 ### Configuration
 
-| Environment variable | Default              | Meaning                                                                            |
-| -------------------- | -------------------- | ---------------------------------------------------------------------------------- |
-| `PORT`               | `8080`               | HTTP and WebSocket port                                                            |
-| `HOST`               | `0.0.0.0`            | Address to listen on (use `127.0.0.1` behind a reverse proxy)                      |
-| `STATIC_DIR`         | `dist`               | The built website                                                                  |
-| `LEVELS_DIR`         | `$STATIC_DIR/levels` | Where the server reads level files from (it needs their collision maps)            |
-| `TRUST_PROXY`        | off                  | Set to `1` behind a reverse proxy so rate limits see `X-Forwarded-For`             |
+| Environment variable | Default              | Meaning                                                                                     |
+| -------------------- | -------------------- | ------------------------------------------------------------------------------------------- |
+| `PORT`               | `8080`               | HTTP and WebSocket port                                                                     |
+| `HOST`               | `0.0.0.0`            | Address to listen on (use `127.0.0.1` behind a reverse proxy)                               |
+| `STATIC_DIR`         | `dist`               | The built website                                                                           |
+| `LEVELS_DIR`         | `$STATIC_DIR/levels` | Where the server reads level files from (it needs their collision maps)                     |
+| `TRUST_PROXY`        | off                  | Set to `1` behind a reverse proxy so rate limits see `X-Forwarded-For`                      |
 | `VITE_SOURCE_URL`    | this repository      | Build time: where **SOURCE CODE** in **ABOUT** points; use your fork if you change the code |
 
 Rooms and matches live in memory; restarting the server closes them.
@@ -143,6 +143,8 @@ location / {
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 }
 ```
@@ -151,6 +153,10 @@ In Nginx Proxy Manager, enable **Websockets Support** on the proxy host. When th
 the game on the proxy's network (uncomment the `networks` parts of [`portainer-stack.yml`](portainer-stack.yml)
 and fill in the network's name), set `TRUST_PROXY` to `1` and forward to `http://jumpnbump-online:8080`; under
 Podman a proxy container often cannot reach another network's published ports through the host's address.
+
+Shared links include a clean forest preview with the online logo. The server resolves the image URL from the
+request host; with `TRUST_PROXY=1`, it also uses `X-Forwarded-Host` and `X-Forwarded-Proto` from the proxy, so HTTPS
+previews work without putting a deployment address in the build.
 
 ## Playing online
 

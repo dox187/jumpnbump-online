@@ -287,6 +287,7 @@ export function Button({
     type = 'button',
     title,
     width,
+    maxTextWidth,
     className = '',
 }: {
     label: string;
@@ -298,6 +299,8 @@ export function Button({
     title?: string;
     /** Minimum width in game pixels. */
     width?: number;
+    /** Shorten the visible label while retaining its full accessible text. */
+    maxTextWidth?: number;
     className?: string;
 }) {
     const [hot, setHot] = useState(false);
@@ -320,7 +323,7 @@ export function Button({
             onFocus={() => setHot(true)}
             onBlur={() => setHot(false)}
         >
-            <Text text={label} color={color} />
+            <Text text={label} color={color} maxWidth={maxTextWidth} />
         </Tag>
     );
 }

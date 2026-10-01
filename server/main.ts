@@ -1,10 +1,11 @@
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocket, WebSocketServer } from 'ws';
 import { Lobby } from './lobby';
+import { social_meta } from './social';
 
 const PORT = Number(process.env.PORT ?? 8080);
 const HOST = process.env.HOST ?? '0.0.0.0';
@@ -83,14 +84,19 @@ async function serve_static(request: IncomingMessage, response: ServerResponse) 
     }
 
     const info = await stat(file);
+    const html = file.endsWith('.html') ? social_meta(await readFile(file, 'utf8'), request, TRUST_PROXY) : null;
     response.writeHead(status, {
         'Content-Type': MIME_TYPES[path.extname(file).toLowerCase()] ?? 'application/octet-stream',
-        'Content-Length': info.size,
+        'Content-Length': html === null ? info.size : Buffer.byteLength(html),
         'Cache-Control': cache_control(file),
         'X-Content-Type-Options': 'nosniff',
     });
     if (request.method === 'HEAD') {
         response.end();
+        return;
+    }
+    if (html !== null) {
+        response.end(html);
         return;
     }
     createReadStream(file).pipe(response);

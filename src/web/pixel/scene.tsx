@@ -492,6 +492,7 @@ export function Scene({
                     className="gp-abs"
                     style={{ left: 0, top: gp(47), width: gp(STAGE_WIDTH), display: 'flex', justifyContent: 'center' }}
                 >
+                    <span className="sr-only">Jump 'n Bump Online</span>
                     <Text text={window.location.hostname} color="dim" maxWidth={STAGE_WIDTH - 16} />
                 </div>
             )}

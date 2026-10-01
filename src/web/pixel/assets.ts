@@ -6,6 +6,7 @@ import type { Gob } from '../../assets';
 import { preread_datafile, read_gob, read_pcx } from '../../data';
 import { init_font } from './font';
 import { dj_load_preview_audio } from '../../sdl/sound';
+import { render_panel_name } from '../../online/panel-names';
 
 export type Sprite = {
     canvas: HTMLCanvasElement;
@@ -78,6 +79,14 @@ export function load_game_assets(): Promise<GameAssets> {
                     image.data[p * 4 + 3] = 255;
                 }
                 context.putImageData(image, 0, 0);
+
+                // Lift the original logo within its black header and letter its subtitle like the score panels.
+                const header = context.getImageData(0, 0, 400, 47);
+                context.fillStyle = '#000';
+                context.fillRect(0, 0, 400, 47);
+                context.putImageData(header, 0, -8);
+                const subtitle = render_panel_name('online', 0);
+                context.drawImage(subtitle, 245 - Math.floor(subtitle.width / 2), 37);
 
                 const mask = read_pcx('menumask.pcx', null);
                 const menu_front = document.createElement('canvas');
