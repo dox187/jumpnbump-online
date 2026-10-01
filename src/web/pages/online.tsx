@@ -517,7 +517,7 @@ function Lobby({
                     </div>
                 </Panel>
             </At>
-            <At x={SCENE_X} y={218}>
+            <At x={SCENE_X} y={212}>
                 <Tips paused={paused} still={still} />
             </At>
         </>
