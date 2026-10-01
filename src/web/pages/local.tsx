@@ -137,6 +137,7 @@ export default function Local() {
             stageRef={setStage}
             fullscreenHelp={FullscreenHelp}
             botModes={botControls ? controls.modes : undefined}
+            scoreLimit={botControls && controls.phase === 'lobby' ? controls.endScore : undefined}
         >
             <canvas
                 ref={setCanvas}
@@ -163,7 +164,7 @@ export default function Local() {
                     {controls.phase === 'lobby' ? (
                         <Button
                             label={`SCORE LIMIT: ${controls.endScore || 'NONE'}`}
-                            title="Click or press F2 to change the score limit"
+                            title="Click or press 9 to change the score limit"
                             onClick={cycle_local_end_score}
                         />
                     ) : (

@@ -278,7 +278,7 @@ The controls on a **QWERTY** keyboard are:
 - 4, 8, 6 to steer Mijji (on the numeric pad)
 
 - 1-4 cycle each bunny through **Human -> Easy -> Medium -> Hard -> Human**, in the local lobby or during a game
-- F2 cycles the local lobby's score limit; clicking or tapping **SCORE LIMIT** does the same
+- 9 (or numpad 9) cycles the local lobby's score limit; clicking or tapping **SCORE LIMIT** does the same
 - F (SHIFT + f) toggles fullscreen
 - ESC ends the current game. From the game's menu it returns to the level picker; close the picker to return to
   the start page.
@@ -303,7 +303,8 @@ a human player runs off the right edge to start. Selected difficulties carry ove
 During a match the number keys change control of participating bunnies; they do not add an absent bunny.
 
 Phones and tablets also show four small **1 2 3 4** buttons in the local lobby and match, half the size of the other
-utility buttons. They perform the same cycle as the keyboard. The numbers are **white** for human control,
+utility buttons. The local lobby adds a matching **9** touch button to cycle the score limit. The bot buttons
+perform the same cycle as the keyboard. Their numbers are **white** for human control,
 **green** for Easy, **yellow** for Medium and **red** for Hard. Computer players remain exclusive to local play.
 
 ## License

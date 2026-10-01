@@ -111,7 +111,8 @@ export function intr_sysupdate(): number {
                         addkey(KEY.PL4_RIGHT, false);
                         addkey(KEY.PL4_JUMP, false);
                         break;
-                    case 'F2':
+                    case 'Digit9':
+                    case 'Numpad9':
                         if (ai_hotkeys_enabled && get_local_controls().phase === 'lobby') {
                             if (event.type === 'keydown') cycle_local_end_score();
                             break;

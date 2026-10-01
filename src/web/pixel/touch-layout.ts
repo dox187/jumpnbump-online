@@ -2,7 +2,16 @@
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../../constants';
 
 export const BOT_BUTTONS = ['bot1', 'bot2', 'bot3', 'bot4'] as const;
-export type ButtonId = 'left' | 'right' | 'jump' | 'back' | 'full' | 'music' | 'effects' | (typeof BOT_BUTTONS)[number];
+export type ButtonId =
+    | 'left'
+    | 'right'
+    | 'jump'
+    | 'back'
+    | 'full'
+    | 'music'
+    | 'effects'
+    | 'score'
+    | (typeof BOT_BUTTONS)[number];
 export type Rect = { x: number; y: number; w: number; h: number };
 export type Insets = { top: number; right: number; bottom: number; left: number };
 export type ShellLayout = {
@@ -195,7 +204,7 @@ function base_layout(
     return { ...best, safe, pixel_scale: scale, view: { w: Math.ceil(width / scale), h: Math.ceil(height / scale) } };
 }
 
-/** Add half-size local bot keys in free space, leaving the game and existing controls clear. */
+/** Add half-size local number keys in free space, leaving the game and existing controls clear. */
 export function screen_layout(
     width: number,
     height: number,
@@ -203,10 +212,12 @@ export function screen_layout(
     mobile: boolean,
     touch: boolean,
     safe: Insets = NO_INSETS,
-    bots = false
+    bots = false,
+    score = false
 ): ShellLayout {
     let layout = base_layout(width, height, dpr, mobile, touch, safe);
-    if (!mobile || !bots) return layout;
+    if (!mobile || (!bots && !score)) return layout;
+    const local_buttons: ButtonId[] = [...(bots ? BOT_BUTTONS : []), ...(score ? (['score'] as const) : [])];
     const scale = layout.pixel_scale;
     const size = Math.max(6, Math.floor(layout.buttons.full!.w / 2));
     const gap = Math.ceil(8 / scale);
@@ -219,8 +230,8 @@ export function screen_layout(
         { x: layout.box.x / scale, y: layout.box.y / scale, w: layout.box.w / scale, h: layout.box.h / scale },
     ];
     let best: { x: number; y: number; columns: number; score: number } | null = null;
-    for (const columns of [4, 2]) {
-        const rows = 4 / columns;
+    for (const columns of new Set([local_buttons.length, Math.ceil(local_buttons.length / 2)])) {
+        const rows = Math.ceil(local_buttons.length / columns);
         const w = columns * size + (columns - 1) * gap;
         const h = rows * size + (rows - 1) * gap;
         const xs = [
@@ -248,12 +259,22 @@ export function screen_layout(
     }
     if (!best) {
         // Very small windows reserve a separate header rather than cover the screen or another key.
-        layout = base_layout(width, height, dpr, mobile, touch, { ...safe, top: safe.top + (size + 2 * gap) * scale });
+        const columns = Math.max(1, Math.min(local_buttons.length, Math.floor((right - left + gap) / (size + gap))));
+        const rows = Math.ceil(local_buttons.length / columns);
+        layout = base_layout(width, height, dpr, mobile, touch, {
+            ...safe,
+            top: safe.top + (rows * size + (rows + 1) * gap) * scale,
+        });
         layout.safe = safe;
-        best = { x: Math.round((left + right - 4 * size - 3 * gap) / 2), y: top, columns: 4, score: 0 };
+        best = {
+            x: Math.round((left + right - columns * size - (columns - 1) * gap) / 2),
+            y: top,
+            columns,
+            score: 0,
+        };
     }
     const buttons = { ...layout.buttons };
-    BOT_BUTTONS.forEach((id, slot) => {
+    local_buttons.forEach((id, slot) => {
         buttons[id] = {
             x: best.x + (slot % best.columns) * (size + gap),
             y: best.y + Math.floor(slot / best.columns) * (size + gap),

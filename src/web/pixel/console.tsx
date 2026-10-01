@@ -40,7 +40,7 @@ function safe_insets(): Insets {
     return insets;
 }
 
-function compute_layout(touch: boolean, bots: boolean): ShellLayout {
+function compute_layout(touch: boolean, bots: boolean, score: boolean): ShellLayout {
     if (typeof window === 'undefined') return screen_layout(SCREEN_WIDTH, SCREEN_HEIGHT, 1, false, false);
     const mobile = is_mobile_device();
     return screen_layout(
@@ -50,20 +50,21 @@ function compute_layout(touch: boolean, bots: boolean): ShellLayout {
         mobile,
         touch,
         mobile ? safe_insets() : undefined,
-        bots
+        bots,
+        score
     );
 }
 
 /** The layout for the current window; recomputed once a resize or rotation has settled. */
-export function useShellLayout(bots = false): ShellLayout {
+export function useShellLayout(bots = false, score = false): ShellLayout {
     const [settings] = useOnlineSettings();
     const touch = touch_enabled(settings);
-    const [layout, setLayout] = useState(() => compute_layout(touch, bots));
+    const [layout, setLayout] = useState(() => compute_layout(touch, bots, score));
     useEffect(() => {
         let timer = 0;
         let late = 0;
         const update = () => {
-            const next = compute_layout(touch, bots);
+            const next = compute_layout(touch, bots, score);
             // Repeated orientation/fullscreen events must not release a new touch when nothing moved.
             setLayout((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
         };
@@ -101,7 +102,7 @@ export function useShellLayout(bots = false): ShellLayout {
             observer.disconnect();
             probe.remove();
         };
-    }, [touch, bots]);
+    }, [touch, bots, score]);
     return layout;
 }
 
@@ -122,11 +123,13 @@ function TouchControls({
     root,
     closeHelp,
     botModes,
+    scoreLimit,
 }: {
     layout: ShellLayout;
     root: { current: HTMLDivElement | null };
     closeHelp: (() => void) | null;
     botModes?: readonly BotMode[];
+    scoreLimit?: number;
 }) {
     const [held, setHeld] = useState<Set<ButtonId>>(new Set());
     const [settings, updateSettings] = useOnlineSettings();
@@ -146,10 +149,11 @@ function TouchControls({
         else if (id === 'effects') updateSettings({ muteEffects: !settings.muteEffects });
         else {
             const slot = (BOT_BUTTONS as readonly string[]).indexOf(id);
-            if (slot >= 0)
+            const digit = id === 'score' ? 9 : slot + 1;
+            if (digit > 0)
                 for (const type of ['keydown', 'keyup']) {
                     window.dispatchEvent(
-                        new KeyboardEvent(type, { key: String(slot + 1), code: `Digit${slot + 1}`, bubbles: true })
+                        new KeyboardEvent(type, { key: String(digit), code: `Digit${digit}`, bubbles: true })
                     );
                 }
         }
@@ -287,13 +291,15 @@ function TouchControls({
                 const label =
                     bot >= 0
                         ? `Player ${bot + 1}: ${BOT_MODE_NAMES[botModes?.[bot] ?? 0]}. Cycle bot difficulty`
-                        : id === 'back'
-                          ? 'Escape'
-                          : id === 'full'
-                            ? 'Toggle fullscreen'
-                            : id === 'music'
-                              ? 'Mute music'
-                              : 'Mute sound effects';
+                        : id === 'score'
+                          ? `Score limit: ${scoreLimit || 'NONE'}. Press 9 to change`
+                          : id === 'back'
+                            ? 'Escape'
+                            : id === 'full'
+                              ? 'Toggle fullscreen'
+                              : id === 'music'
+                                ? 'Mute music'
+                                : 'Mute sound effects';
                 return (
                     rect && (
                         <Tag
@@ -384,6 +390,7 @@ export function Shell({
     stageRef,
     fullscreenHelp: FullscreenHelp,
     botModes,
+    scoreLimit,
     children,
 }: {
     width: number;
@@ -392,9 +399,10 @@ export function Shell({
     stageRef?: Ref<HTMLDivElement>;
     fullscreenHelp: ComponentType<FullscreenHelpProps>;
     botModes?: readonly BotMode[];
+    scoreLimit?: number;
     children: ComponentChildren;
 }) {
-    const layout = useShellLayout(botModes !== undefined);
+    const layout = useShellLayout(botModes !== undefined, scoreLimit !== undefined);
     const root = useRef<HTMLDivElement>(null);
     const [fullscreenIssue, setFullscreenIssue] = useState<FullscreenIssue | null>(null);
     const closeHelp = () => setFullscreenIssue(null);
@@ -454,6 +462,7 @@ export function Shell({
                 root={root}
                 closeHelp={fullscreenIssue ? closeHelp : null}
                 botModes={botModes}
+                scoreLimit={scoreLimit}
             />
             <div
                 className="gp-screen"

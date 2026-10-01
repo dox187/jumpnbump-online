@@ -7,6 +7,7 @@ const ICONS: Record<ButtonId, string[]> = {
     bot2: ['###', '..#', '###', '#..', '###'],
     bot3: ['###', '..#', '.##', '..#', '###'],
     bot4: ['#.#', '#.#', '###', '..#', '..#'],
+    score: ['###', '#.#', '###', '..#', '###'],
     music: [
         '....#########',
         '....#########',
@@ -121,6 +122,7 @@ export function draw_touch_controls(
         context.fillStyle = `rgba(255,255,255,${pressed ? 1 : 0.7})`;
         const bot = (BOT_BUTTONS as readonly string[]).indexOf(id);
         if (bot >= 0) context.fillStyle = BOT_MODE_COLORS[bot_modes[bot] ?? 0];
+        if (id === 'score') context.fillStyle = '#ffffff';
         for (let y = 0; y < icon.length; y++)
             for (let x = 0; x < icon[y].length; x++) if (icon[y][x] === '#') context.fillRect(ox + x, oy + y, 1, 1);
         if (muted.has(id)) {
