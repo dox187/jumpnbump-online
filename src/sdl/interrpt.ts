@@ -4,7 +4,7 @@ import { KEY } from '../constants';
 import { poll_events, get_mouse_buttons } from './events';
 import { toggle_fullscreen } from './gfx';
 import { GamepadPresses, PAD_BACK, PAD_START } from '../extra-input';
-import { cycle_local_bot } from '../local-controls';
+import { cycle_local_bot, cycle_local_end_score, get_local_controls } from '../local-controls';
 
 let lastTick = 0;
 const TICK_LENGTH = 1000 / 60;
@@ -111,6 +111,11 @@ export function intr_sysupdate(): number {
                         addkey(KEY.PL4_RIGHT, false);
                         addkey(KEY.PL4_JUMP, false);
                         break;
+                    case 'F2':
+                        if (ai_hotkeys_enabled && get_local_controls().phase === 'lobby') {
+                            if (event.type === 'keydown') cycle_local_end_score();
+                            break;
+                        }
                     case KEY.F:
                         if (event.key === 'F' && event.type === 'keydown') {
                             toggle_fullscreen();

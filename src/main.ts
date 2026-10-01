@@ -33,7 +33,7 @@ import {
     dj_stop_sfx_channel,
 } from './sdl/sound';
 import { update_player_actions } from './sdl/input';
-import { intr_sysupdate, key_pressed } from './sdl/interrpt';
+import { intr_sysupdate, key_pressed, key_went_down } from './sdl/interrpt';
 import { GET_BAN_MAP_TILE, SET_BAN_MAP, get_ban_map } from './level';
 import {
     serverTellEveryoneGoodbye,
@@ -54,6 +54,7 @@ import {
     position_flies,
     update_flies,
     init_renderer,
+    clear_scores,
 } from './renderer';
 import { memset, rnd } from './c';
 import {
@@ -75,10 +76,9 @@ import { Pob, register_gob, get_gob } from './assets';
 import { GameInputDevice } from 'inputs';
 import { INPUT_LEFT, INPUT_RIGHT, INPUT_UP, Sim, create_state } from './sim/sim';
 import { LocalBot } from './local-bot';
-import { set_local_phase } from './local-controls';
-import { local_fx } from './fx';
-
-let endscore_reached = 0;
+import { LocalReplay, REPLAY_FRAME_MS, REPLAY_HOLD_MS } from './local-replay';
+import { get_local_controls, set_local_phase } from './local-controls';
+import { local_fx, show_score } from './fx';
 
 const pal = new Uint8ClampedArray(768);
 const cur_pal = new Uint8ClampedArray(768);
@@ -109,9 +109,14 @@ function collision_check() {
 
 async function game_loop() {
     for (const bot of local_bots) bot.reset();
+    const sim = local_sim();
+    sim.end_score = get_local_controls().endScore;
+    sim.state.endscore_reached = false;
     set_local_phase('playing');
     const main_info = ctx.info;
     const player = ctx.player;
+    const replay = new LocalReplay();
+    let view_player = player;
     let mod_vol, sfx_vol;
     let update_count = 1;
     let end_loop_flag = 0;
@@ -130,10 +135,16 @@ async function game_loop() {
 
     intr_sysupdate();
 
-    endscore_reached = 0;
     async function inner_game_loop() {
         while (update_count) {
-            if (endscore_reached || key_pressed(KEY.ESCAPE)) {
+            if (sim.state.endscore_reached && !end_loop_flag) {
+                view_player = await play_local_replay(replay);
+                if (game_stopped()) return 0;
+                // The replay has its own clock. Discard time already spent playing it back.
+                intr_sysupdate();
+                update_count = 1;
+            }
+            if (sim.state.endscore_reached || key_pressed(KEY.ESCAPE) || key_went_down(KEY.ESCAPE)) {
                 if (is_net) {
                     if (is_server) {
                         serverTellEveryoneGoodbye();
@@ -142,6 +153,7 @@ async function game_loop() {
                     }
                 }
                 end_loop_flag = 1;
+                if (get_local_controls().phase !== 'ending') set_local_phase('ending');
                 memset(pal, 0, 768);
                 mod_fade_direction = 0;
             }
@@ -158,11 +170,12 @@ async function game_loop() {
                 }
             }
 
-            steer_players();
+            // Keep the final scores fixed during the replay and the fade into the result screen.
+            if (!end_loop_flag) steer_players(sim.end_score > 0 ? replay : undefined);
 
             dj_mix();
 
-            collision_check();
+            if (!end_loop_flag) collision_check();
 
             dj_mix();
 
@@ -189,9 +202,9 @@ async function game_loop() {
                         if (!main_info.page_info.pobs[c2]) {
                             main_info.page_info.pobs[c2] = new Pob();
                         }
-                        main_info.page_info.pobs[c2].x = player[i].x >> 16;
-                        main_info.page_info.pobs[c2].y = player[i].y >> 16;
-                        main_info.page_info.pobs[c2].image = player[i].image + i * 18;
+                        main_info.page_info.pobs[c2].x = view_player[i].x >> 16;
+                        main_info.page_info.pobs[c2].y = view_player[i].y >> 16;
+                        main_info.page_info.pobs[c2].image = view_player[i].image + i * 18;
                         main_info.page_info.pobs[c2].pob_data = rabbit_gobs;
                         c2++;
                     }
@@ -285,6 +298,94 @@ async function game_loop() {
     await run_in_frame_loop(inner_game_loop);
 
     return 0;
+}
+
+/** Plays the final bump without changing the real players, scores or gameplay RNG. */
+async function play_local_replay(replay: LocalReplay) {
+    const player = ctx.player;
+    if (
+        !replay.start(get_ban_map(), {
+            ...local_fx,
+            dj_play_sfx: (sfx, freq, volume, panning, delay, channel) =>
+                local_fx.dj_play_sfx(sfx, Math.round(freq / 2), volume, panning, delay, channel),
+            add_score: () => {},
+        })
+    ) {
+        return player;
+    }
+
+    for (const object of ctx.objects) {
+        if (object.type !== OBJ.SPRING && object.type !== OBJ.YEL_BUTFLY && object.type !== OBJ.PINK_BUTFLY) {
+            object.used = 0;
+        }
+    }
+    const main_info = ctx.info;
+    const rabbit_gobs = get_gob('rabbit');
+    let object_pobs: Pob[] = [];
+    const started = performance.now();
+    set_local_phase('replay');
+
+    try {
+        await run_in_frame_loop(async () => {
+            intr_sysupdate();
+            if (
+                get_local_controls().phase !== 'replay' ||
+                key_went_down(KEY.ESCAPE) ||
+                key_went_down('Enter') ||
+                key_went_down('Space')
+            ) {
+                return 0;
+            }
+            const elapsed = performance.now() - started;
+            const frames = elapsed / REPLAY_FRAME_MS;
+            const target = Math.min(Math.floor(frames), replay.length);
+            ctx.player = replay.sim.state.player as typeof player;
+            while (replay.frame < target) {
+                replay.step();
+                main_info.page_info.num_pobs = 0;
+                update_objects();
+                object_pobs = main_info.page_info.pobs.slice(0, main_info.page_info.num_pobs);
+                if (flies_enabled) update_flies(1);
+            }
+
+            const pobs: Pob[] = [];
+            for (let i = 0; i < JNB_MAX_PLAYERS; i++) {
+                const p = ctx.player[i];
+                if (!p.enabled) continue;
+                let x = p.x >> 16;
+                let y = p.y >> 16;
+                const from_x = replay.from_x[i] >> 16;
+                const from_y = replay.from_y[i] >> 16;
+                // Interpolate slow motion, but never drag a respawning bunny across the level.
+                if (replay.frame < replay.length && Math.abs(x - from_x) < 32 && Math.abs(y - from_y) < 32) {
+                    x = Math.round(from_x + (x - from_x) * (frames % 1));
+                    y = Math.round(from_y + (y - from_y) * (frames % 1));
+                }
+                pobs.push({ x, y, image: p.image + i * 18, pob_data: rabbit_gobs });
+            }
+            for (const pob of object_pobs) {
+                if (pobs.length >= NUM.POBS) break;
+                pobs.push(pob);
+            }
+            main_info.page_info.pobs = pobs;
+            main_info.page_info.num_pobs = pobs.length;
+            draw_begin();
+            draw_pobs();
+            if (flies_enabled) draw_flies();
+            draw_leftovers(main_info.draw_page);
+            clear_scores();
+            for (let i = 0; i < JNB_MAX_PLAYERS; i++) if (ctx.player[i].enabled) show_score(i, ctx.player[i].bumps);
+            draw_score();
+            draw_end();
+            ctx.player = player;
+            return elapsed >= replay.length * REPLAY_FRAME_MS + REPLAY_HOLD_MS ? 0 : -1;
+        });
+    } finally {
+        ctx.player = player;
+        clear_scores();
+        for (let i = 0; i < JNB_MAX_PLAYERS; i++) if (player[i].enabled) show_score(i, player[i].bumps);
+    }
+    return replay.sim.state.player as typeof player;
 }
 
 function game_stopped() {
@@ -438,7 +539,7 @@ async function menu_loop() {
 
         async function scores_loop() {
             if (!has_escape_been_pressed) {
-                has_escape_been_pressed = key_pressed(KEY.ESCAPE);
+                has_escape_been_pressed = key_went_down(KEY.ESCAPE);
             }
 
             if (!has_escape_been_pressed) {
@@ -537,9 +638,10 @@ function cpu_move() {
     }
 }
 
-function steer_players() {
+function steer_players(replay?: LocalReplay) {
     update_player_actions();
     cpu_move();
+    replay?.record(local_sim().state, cheats);
     local_sim().steer_players();
 }
 

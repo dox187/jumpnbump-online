@@ -38,6 +38,7 @@ const message = [
     'then run off the right edge to start!',
     '1-4: Easy, Medium, Hard, then Human',
     'Bots join you; run right to start!',
+    'F2: change the score limit',
     'SHIFT F: fullscreen     ESC: back',
 ];
 

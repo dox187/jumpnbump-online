@@ -3,7 +3,13 @@ import { useLocation } from 'preact-iso';
 import { Engine } from '../../engine';
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../../constants';
 import { BUNNY_NAMES, DEFAULT_LEVEL } from '../../net/protocol';
-import { BOT_MODE_NAMES, get_local_controls, subscribe_local_controls } from '../../local-controls';
+import {
+    BOT_MODE_NAMES,
+    cycle_local_end_score,
+    get_local_controls,
+    skip_local_replay,
+    subscribe_local_controls,
+} from '../../local-controls';
 import { LevelDialog } from '../components/level-dialog';
 import { usePageMeta } from '../hooks/page-meta';
 import { useOnlineSettings } from '../hooks/online-settings';
@@ -143,6 +149,33 @@ export default function Local() {
                     visibility: running ? 'visible' : 'hidden',
                 }}
             />
+            {botControls && (controls.phase === 'lobby' || !notice) && (
+                <div
+                    className="gp-abs"
+                    style={{
+                        top: gp(controls.phase === 'lobby' ? 194 : 4),
+                        left: 0,
+                        width: gp(SCREEN_WIDTH),
+                        display: 'flex',
+                        justifyContent: 'center',
+                    }}
+                >
+                    {controls.phase === 'lobby' ? (
+                        <Button
+                            label={`SCORE LIMIT: ${controls.endScore || 'NONE'}`}
+                            title="Click or press F2 to change the score limit"
+                            onClick={cycle_local_end_score}
+                        />
+                    ) : (
+                        <div style={{ background: 'rgba(0,0,0,0.85)', padding: `${gp(1)} ${gp(4)}` }}>
+                            <Text
+                                text={controls.endScore ? `FIRST TO ${controls.endScore}` : 'NO SCORE LIMIT'}
+                                color="dim"
+                            />
+                        </div>
+                    )}
+                </div>
+            )}
             {botControls && notice && (
                 <div
                     className="gp-abs"
@@ -164,6 +197,16 @@ export default function Local() {
                         />
                     </div>
                 </div>
+            )}
+            {running && !failed && controls.phase === 'replay' && (
+                <>
+                    <div className="gp-abs gp-blink pointer-events-none" style={{ left: gp(6), top: gp(4) }}>
+                        <Text text="REPLAY" color="red" size={2} shadow />
+                    </div>
+                    <div className="gp-abs" style={{ right: gp(54), bottom: gp(4) }}>
+                        <Button label="SKIP" onClick={skip_local_replay} />
+                    </div>
+                </>
             )}
             {fontReady && !level && !failed && (
                 <LevelDialog

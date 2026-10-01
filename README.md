@@ -278,12 +278,19 @@ The controls on a **QWERTY** keyboard are:
 - 4, 8, 6 to steer Mijji (on the numeric pad)
 
 - 1-4 cycle each bunny through **Human -> Easy -> Medium -> Hard -> Human**, in the local lobby or during a game
+- F2 cycles the local lobby's score limit; clicking or tapping **SCORE LIMIT** does the same
 - F (SHIFT + f) toggles fullscreen
 - ESC ends the current game. From the game's menu it returns to the level picker; close the picker to return to
   the start page.
 
 In the menu, jump over the log to join and run off the right edge to start. The local game uses your selected level
 and the sound, gore and flies settings from **OPTIONS**.
+
+Choose **5, 10, 25, 50 or 100** points in the local lobby, or **NONE** for unlimited play. The default is 10.
+The first bunny to reach the target ends the match automatically. The final bump replays at 2.5 times slower
+speed before the score screen; click **SKIP** or press ESC, Enter or Space to skip it. Jump buttons do not skip
+the replay. The limit stays fixed during the match and carries over to subsequent games until you change it
+or reload the page. ESC also ends a match early, including unlimited games, without a replay.
 
 Computer bunnies use the same physics and route planning on every difficulty: they find paths around platforms,
 use springs, and back up for another approach when stuck beneath a ledge. **Easy** reacts more slowly in close
