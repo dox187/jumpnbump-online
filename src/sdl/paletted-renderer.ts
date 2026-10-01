@@ -1,3 +1,5 @@
+// Changed by dox187 on 2026-10-01 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
+
 import crc32 from 'crc/calculators/crc32';
 
 type Sprite = {
@@ -13,28 +15,47 @@ type PositionedSprite = Sprite & {
     y: number;
 };
 
+/** A sprite in screen colours, with a 32-bit view for copying whole pixels. */
+type RenderedImage = {
+    image: ImageData;
+    pixels: Uint32Array;
+};
+
+/**
+ * Only the latest palettes are kept: a fade sets a new palette every frame, and keeping a full screen
+ * background and mask for each of those steps held tens of megabytes.
+ */
+const KEPT_PALETTES = 2;
+
 class PalettedCache {
-    cache: Record<string, Record<string, ImageData>> = {};
+    cache: Map<string, Map<string, RenderedImage>> = new Map();
     paletteKey: string = '';
 
     updatePaletteKey(key: string) {
         this.paletteKey = key;
+        if (this.cache.has(key)) return;
+        this.cache.set(key, new Map());
+        for (const old of this.cache.keys()) {
+            if (this.cache.size <= KEPT_PALETTES) break;
+            if (old !== key) this.cache.delete(old);
+        }
     }
 
     purgeForKey(key: string) {
-        delete this.cache[key];
+        for (const images of this.cache.values()) images.delete(key);
     }
 
-    get(key: string): ImageData | undefined {
-        return this.cache[key]?.[this.paletteKey];
+    get(key: string): RenderedImage | undefined {
+        return this.cache.get(this.paletteKey)?.get(key);
     }
 
-    set(key: string, data: ImageData) {
-        if (!this.cache[key]) {
-            this.cache[key] = {};
+    set(key: string, data: RenderedImage) {
+        let images = this.cache.get(this.paletteKey);
+        if (!images) {
+            images = new Map();
+            this.cache.set(this.paletteKey, images);
         }
-
-        this.cache[key][this.paletteKey] = data;
+        images.set(key, data);
     }
 }
 
@@ -75,6 +96,17 @@ function extractMaskFromBackground(background: Uint8ClampedArray, mask: Uint8Cla
     };
 }
 
+function rendered(image: ImageData): RenderedImage {
+    return { image, pixels: new Uint32Array(image.data.buffer, image.data.byteOffset, image.width * image.height) };
+}
+
+/**
+ * Draws the paletted screen of the original game: background, sprites in the order they were put, and the mask
+ * (the parts of the level in front of the bunnies) on top.
+ *
+ * Every frame starts from a cached copy of the background with the mask already applied, so the mask only has to
+ * be drawn again where sprites were put. The frame buffer is reused, so drawing allocates nothing per frame.
+ */
 export class PalettedRenderer {
     imageCache: PalettedCache = new PalettedCache();
     width: number;
@@ -83,12 +115,16 @@ export class PalettedRenderer {
     mask: Sprite;
     currentObjects: PositionedSprite[];
     palette: Uint8ClampedArray;
+    frame: RenderedImage;
+    /** Screen areas the sprites of the current frame cover: x, y, width and height, four numbers each. */
+    private covered: number[] = [];
 
     constructor(width: number, height: number) {
         this.width = width;
         this.height = height;
         this.palette = new Uint8ClampedArray(256 * 3);
         this.currentObjects = [];
+        this.frame = rendered(new ImageData(width, height));
         this.background = {
             key: 'background',
             data: new Uint8ClampedArray(width * height * 3),
@@ -111,6 +147,7 @@ export class PalettedRenderer {
 
     registerBackground(background: Uint8ClampedArray): void {
         this.imageCache.purgeForKey(this.background.key);
+        this.imageCache.purgeForKey('composed');
         this.background.data = background;
         const image = this.#renderPixels(background, this.width, this.height);
         this.imageCache.set(this.background.key, image);
@@ -118,6 +155,7 @@ export class PalettedRenderer {
 
     registerMask(mask: Uint8ClampedArray): void {
         this.imageCache.purgeForKey(this.mask.key);
+        this.imageCache.purgeForKey('composed');
         const extractData = extractMaskFromBackground(this.background.data, mask);
         this.mask.data = extractData.data;
         this.mask.alphaColor = extractData.alphaColor;
@@ -125,60 +163,109 @@ export class PalettedRenderer {
         this.imageCache.set(this.mask.key, image);
     }
 
-    getImage({ key, data, width, height, alphaColor }: Sprite): ImageData {
+    #getRendered({ key, data, width, height, alphaColor }: Sprite): RenderedImage {
         const cached = this.imageCache.get(key);
         if (cached) {
             return cached;
         }
-        const rendered = this.#renderPixels(data, width, height, alphaColor);
-        this.imageCache.set(key, rendered);
-        return rendered;
+        const image = this.#renderPixels(data, width, height, alphaColor);
+        this.imageCache.set(key, image);
+        return image;
+    }
+
+    getImage(sprite: Sprite): ImageData {
+        return this.#getRendered(sprite).image;
     }
 
     putObject(x: number, y: number, sprite: Sprite): void {
+        // Rendered in the palette that is current when the frame is drawn
         this.currentObjects.push({ x, y, ...sprite });
-        const rendered = this.getImage(sprite);
-        this.imageCache.set(sprite.key, rendered);
     }
 
-    #renderPixels(pixels: Uint8ClampedArray, width: number, height: number, alphaColor?: number): ImageData {
-        const data = new Uint8ClampedArray(width * height * 4);
-        for (let i = 0; i < pixels.length; i++) {
-            const colorIndex = pixels[i] * 3;
-            data[i * 4] = this.palette[colorIndex];
-            data[i * 4 + 1] = this.palette[colorIndex + 1];
-            data[i * 4 + 2] = this.palette[colorIndex + 2];
-            data[i * 4 + 3] = alphaColor === pixels[i] ? 0 : 255;
+    #renderPixels(pixels: Uint8ClampedArray, width: number, height: number, alphaColor?: number): RenderedImage {
+        // Each palette colour once as a whole pixel, opaque and transparent
+        const colors = new Uint8ClampedArray(256 * 4 * 2);
+        for (let c = 0; c < 256; c++) {
+            for (let n = 0; n < 2; n++) {
+                const i = (n * 256 + c) * 4;
+                colors[i] = this.palette[c * 3];
+                colors[i + 1] = this.palette[c * 3 + 1];
+                colors[i + 2] = this.palette[c * 3 + 2];
+                colors[i + 3] = n === 0 ? 255 : 0;
+            }
         }
-        return new ImageData(data, width, height);
+        const lookup = new Uint32Array(colors.buffer);
+        const image = rendered(new ImageData(width, height));
+        const out = image.pixels;
+        const count = Math.min(pixels.length, out.length);
+        for (let i = 0; i < count; i++) {
+            const color = pixels[i];
+            out[i] = lookup[color === alphaColor ? 256 + color : color];
+        }
+        return image;
+    }
+
+    /** The background with the mask drawn over it. */
+    #composed(): RenderedImage {
+        const cached = this.imageCache.get('composed');
+        if (cached) return cached;
+        const background = this.#getRendered(this.background).pixels;
+        const mask = this.#getRendered(this.mask);
+        const alpha = mask.image.data;
+        const image = rendered(new ImageData(this.width, this.height));
+        const out = image.pixels;
+        for (let i = 0; i < out.length; i++) out[i] = alpha[i * 4 + 3] === 0 ? background[i] : mask.pixels[i];
+        this.imageCache.set('composed', image);
+        return image;
     }
 
     render(): ImageData {
-        const background = this.getImage(this.background);
-        const currentFrame = Uint8ClampedArray.from(background.data);
-        const spritesToRender = [...this.currentObjects, { x: 0, y: 0, ...this.mask }];
-        for (let object of spritesToRender) {
-            const image = this.getImage(object);
-            const { x, y, width } = object;
-            for (let i = 0; i < image.data.length; i += 4) {
-                const xIndex = (i / 4) % width;
-                const yIndex = Math.floor(i / 4 / width);
-                const xPos = x + (xIndex % width);
-                const yPos = y + yIndex;
-                if (xPos < 0 || xPos >= this.width || yPos < 0 || yPos >= this.height) {
-                    continue;
+        const frame = this.frame.pixels;
+        const screenWidth = this.width;
+        frame.set(this.#composed().pixels);
+        const covered = this.covered;
+        covered.length = 0;
+
+        for (const object of this.currentObjects) {
+            // Sprites are placed on whole pixels (all callers shift fixed-point positions or use integers)
+            if (!Number.isInteger(object.x) || !Number.isInteger(object.y)) continue;
+            const sprite = this.#getRendered(object);
+            const width = sprite.image.width;
+            const height = sprite.image.height;
+            const left = Math.max(0, object.x);
+            const right = Math.min(screenWidth, object.x + width);
+            const top = Math.max(0, object.y);
+            const bottom = Math.min(this.height, object.y + height);
+            if (left >= right || top >= bottom) continue;
+            const alpha = sprite.image.data;
+            const pixels = sprite.pixels;
+            for (let y = top; y < bottom; y++) {
+                const source = (y - object.y) * width - object.x;
+                const target = y * screenWidth;
+                for (let x = left; x < right; x++) {
+                    if (alpha[(source + x) * 4 + 3] !== 0) frame[target + x] = pixels[source + x];
                 }
-                const index = (yPos * this.width + xPos) * 4;
-                if (image.data[i + 3] === 0) {
-                    continue;
+            }
+            covered.push(left, top, right - left, bottom - top);
+        }
+
+        // The mask stays in front of every sprite
+        const mask = this.#getRendered(this.mask);
+        const maskAlpha = mask.image.data;
+        const maskPixels = mask.pixels;
+        for (let i = 0; i < covered.length; i += 4) {
+            const left = covered[i];
+            const right = left + covered[i + 2];
+            const bottom = covered[i + 1] + covered[i + 3];
+            for (let y = covered[i + 1]; y < bottom; y++) {
+                const row = y * screenWidth;
+                for (let p = row + left; p < row + right; p++) {
+                    if (maskAlpha[p * 4 + 3] !== 0) frame[p] = maskPixels[p];
                 }
-                currentFrame[index] = image.data[i];
-                currentFrame[index + 1] = image.data[i + 1];
-                currentFrame[index + 2] = image.data[i + 2];
-                currentFrame[index + 3] = image.data[i + 3];
             }
         }
+
         this.currentObjects = [];
-        return new ImageData(currentFrame, this.width, this.height);
+        return this.frame.image;
     }
 }

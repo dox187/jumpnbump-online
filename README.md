@@ -198,6 +198,11 @@ original proportions and use the largest screen area that fits alongside the con
   or fullscreen changes.
 - **Other controls:** keyboards and gamepads work alongside touch. Turn touch buttons off under **OPTIONS** to
   give the game the entire available area. Computers show no touch controls.
+- **Battery and CPU:** frame drawing and audio were optimized for phones on 2026-10-01. In an emulated phone
+  playing a two-player match with the CPU slowed down four times, the browser's main thread went from about 22%
+  to about 6% busy. Browser buffer memory during a match also went from a 50-100 MB sawtooth to a steady 4 MB.
+  Only the song that is playing and the sound effects keep the audio device running, and nothing does outside a
+  game. These figures come from emulation, not from a real phone.
 
 Music needs HTTPS or localhost; some browsers also require HTTPS for gamepads.
 
@@ -221,6 +226,10 @@ Music needs HTTPS or localhost; some browsers also require HTTPS for gamepads.
   three or more players); the original searched forever.
 - The in-game score digits no longer pile up in memory, and a separate **mute music** option was added for the
   online mode.
+- Drawing a frame takes far less CPU time and memory, which matters most on phones: the screen is composed in a
+  reused buffer, the level's foreground mask is redrawn only where sprites are, and palette fades no longer keep a
+  full-screen copy for every step. Songs that are not playing and the sound effects outside a game no longer keep
+  the audio device running.
 - The jumpnbump.net website pages (levels, about, secrets and the local game setup page) were replaced: credits and
   secrets are in the **About** window of the start page, the local game starts directly, and the old addresses lead
   to the start page.
@@ -258,10 +267,10 @@ and the sound, gore and flies settings from **OPTIONS**.
 Jump 'n Bump is distributed under the GNU General Public License, version 2, or (at your option) any later version
 (GPL-2.0+). See the AUTHORS file for credits.
 
-This fork was changed from [jumpnbump.js](https://github.com/jamsinclair/jumpnbump.js) by dox187 on 2026-09-29 and
-2026-09-30 (see [Changes compared with jumpnbump.js](#changes-compared-with-jumpnbumpjs) and the git history). Each
-changed file, and each new file that contains code from jumpnbump.js, says so in its first lines; this README,
-`package.json`, `package-lock.json` and `src/web/levels.json` were changed as well.
+This fork was changed from [jumpnbump.js](https://github.com/jamsinclair/jumpnbump.js) by dox187 on 2026-09-29,
+2026-09-30 and 2026-10-01 (see [Changes compared with jumpnbump.js](#changes-compared-with-jumpnbumpjs) and the git
+history). Each changed file, and each new file that contains code from jumpnbump.js, says so in its first lines; this
+README, `package.json`, `package-lock.json` and `src/web/levels.json` were changed as well.
 
 ## Server capacity and load testing
 

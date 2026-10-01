@@ -1,4 +1,4 @@
-// Changed by dox187 on 2026-09-29 and 2026-09-30 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
+// Changed by dox187 on 2026-09-29, 2026-09-30 and 2026-10-01 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
 
 import { read_data } from '../data';
 import { MAX_VOLUME, MOD, SFX } from '../constants';
@@ -15,6 +15,8 @@ const sounds: ArrayBuffer[] = [];
 /** A sound effect that is playing. */
 type Voice = { source: AudioBufferSourceNode; gain: GainNode };
 const channels: Voice[][] = [];
+/** Every sound effect that is playing, also those on no channel (-1). */
+const voices = new Set<Voice>();
 const tracks: Mod[] = [];
 let currentTrack: MOD | null = null;
 const getCurrentTrack = () => tracks[currentTrack] ?? null;
@@ -33,6 +35,8 @@ const limitToWebSafeSampleRate = (sampleRate: number) =>
  */
 let sfx_context: AudioContext | null = null;
 let sfx_master: GainNode | null = null;
+/** Set while the effects context is being suspended after a game; the next sound resumes it once that is done. */
+let sfx_suspending: Promise<void> | null = null;
 const track_volumes = new WeakMap<Mod, number>();
 
 function set_track_volume(track: Mod, volume: number) {
@@ -67,7 +71,11 @@ function sfx_audio(): AudioContext | null {
             return null;
         }
     }
-    if (sfx_context.state === 'suspended') sfx_context.resume().catch(() => {});
+    if (sfx_suspending) {
+        const audio = sfx_context;
+        sfx_suspending.then(() => audio.resume()).catch(() => {});
+        sfx_suspending = null;
+    } else if (sfx_context.state === 'suspended') sfx_context.resume().catch(() => {});
     return sfx_context;
 }
 
@@ -121,7 +129,9 @@ export function dj_play_sfx(
     gain.gain.value = volume / MAX_VOLUME;
     source.connect(gain).connect(sfx_master!);
     const voice: Voice = { source, gain };
+    voices.add(voice);
     source.onended = () => {
+        voices.delete(voice);
         source.disconnect();
         gain.disconnect();
         if (channel !== -1) channels[channel] = (channels[channel] ?? []).filter((v) => v !== voice);
@@ -176,7 +186,16 @@ function stop_track(track: Mod) {
         // play() makes a new node and loads the song into it again
         track.node = null;
     }
-    track.context.suspend().catch(() => {});
+    suspend_track(track);
+}
+
+/** The latest suspend() of each track's AudioContext; play() waits for it, or the song would start suspended. */
+const suspending = new WeakMap<Mod, Promise<void>>();
+
+/** A running AudioContext keeps the audio device busy even in silence, which costs battery on phones. */
+function suspend_track(track: Mod) {
+    const done = track.context.suspend().catch(() => {});
+    suspending.set(track, done);
 }
 
 export function dj_start_mod() {
@@ -189,15 +208,17 @@ export function dj_start_mod() {
     // Keep the song's position while muted, so toggling music does not restart it.
     set_track_volume(track, context.info.no_music || context.info.no_sound ? 0 : (track_volumes.get(track) ?? 1));
     wanted.set(track, true);
-    track.play().then(
-        () => {
-            if (!wanted.get(track)) stop_track(track);
-        },
-        (e: unknown) => {
-            wanted.set(track, false);
-            console.info('Music could not start:', e);
-        }
-    );
+    (suspending.get(track) ?? Promise.resolve())
+        .then(() => track.play())
+        .then(
+            () => {
+                if (!wanted.get(track)) stop_track(track);
+            },
+            (e: unknown) => {
+                wanted.set(track, false);
+                console.info('Music could not start:', e);
+            }
+        );
 }
 
 export function dj_stop_mod() {
@@ -218,6 +239,10 @@ export function dj_deinit() {
     window.removeEventListener('touchstart', handleUserGesture);
     window.removeEventListener('mousedown', handleUserGesture);
     window.removeEventListener('keydown', handleKeyboardUserGesture);
+    // Nothing plays outside the game, so the effects context sleeps until the next sound
+    for (const voice of voices) stop_voice(voice);
+    channels.length = 0;
+    if (sfx_context && !sfx_suspending) sfx_suspending = sfx_context.suspend().catch(() => {});
 }
 
 /** Stops the music: every track, also the ones that were faded out and left running. */
@@ -245,20 +270,23 @@ export function dj_set_sfx_volume(volume: number) {}
 
 export function dj_mix() {}
 
+function stop_voice(voice: Voice) {
+    voices.delete(voice);
+    try {
+        voice.source.stop();
+    } catch {
+        // already stopped
+    }
+    voice.source.disconnect();
+    voice.gain.disconnect();
+}
+
 export function dj_stop_sfx_channel(channel_num: number) {
     if (!channels[channel_num]) {
         return;
     }
 
-    for (const voice of channels[channel_num]) {
-        try {
-            voice.source.stop();
-        } catch {
-            // already stopped
-        }
-        voice.source.disconnect();
-        voice.gain.disconnect();
-    }
+    for (const voice of channels[channel_num]) stop_voice(voice);
     channels[channel_num] = [];
 }
 
@@ -292,7 +320,10 @@ export function dj_load_mod(filename: string, mod_num: MOD) {
         old.context.close().catch(() => {});
     }
     try {
-        tracks[mod_num] = new Mod({ src, audioWorkletUrl, wasmUrl });
+        const track = new Mod({ src, audioWorkletUrl, wasmUrl });
+        tracks[mod_num] = track;
+        // All songs are loaded up front but only one plays; dj_start_mod resumes its context
+        suspend_track(track);
     } catch (e) {
         console.info('Music is not available in this browser:', e);
     }
