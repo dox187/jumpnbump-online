@@ -6,6 +6,7 @@ import type { ComponentChildren, ComponentType, JSX, Ref } from 'preact';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { touch_input } from '../../extra-input';
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../../constants';
+import { BOT_MODE_NAMES, type BotMode } from '../../local-controls';
 import {
     FULLSCREEN_HELP_EVENT,
     FullscreenHelpProps,
@@ -15,7 +16,7 @@ import {
 } from '../../fullscreen';
 import { is_mobile_device, touch_enabled, useOnlineSettings } from '../hooks/online-settings';
 import { draw_touch_controls } from './touch-art';
-import { screen_layout, type ButtonId, type Insets, type Rect, type ShellLayout } from './touch-layout';
+import { BOT_BUTTONS, screen_layout, type ButtonId, type Insets, type Rect, type ShellLayout } from './touch-layout';
 
 /** The safe area of phones with notches and rounded corners, in CSS pixels. */
 function safe_probe() {
@@ -39,7 +40,7 @@ function safe_insets(): Insets {
     return insets;
 }
 
-function compute_layout(touch: boolean): ShellLayout {
+function compute_layout(touch: boolean, bots: boolean): ShellLayout {
     if (typeof window === 'undefined') return screen_layout(SCREEN_WIDTH, SCREEN_HEIGHT, 1, false, false);
     const mobile = is_mobile_device();
     return screen_layout(
@@ -48,20 +49,21 @@ function compute_layout(touch: boolean): ShellLayout {
         window.devicePixelRatio || 1,
         mobile,
         touch,
-        mobile ? safe_insets() : undefined
+        mobile ? safe_insets() : undefined,
+        bots
     );
 }
 
 /** The layout for the current window; recomputed once a resize or rotation has settled. */
-export function useShellLayout(): ShellLayout {
+export function useShellLayout(bots = false): ShellLayout {
     const [settings] = useOnlineSettings();
     const touch = touch_enabled(settings);
-    const [layout, setLayout] = useState(() => compute_layout(touch));
+    const [layout, setLayout] = useState(() => compute_layout(touch, bots));
     useEffect(() => {
         let timer = 0;
         let late = 0;
         const update = () => {
-            const next = compute_layout(touch);
+            const next = compute_layout(touch, bots);
             // Repeated orientation/fullscreen events must not release a new touch when nothing moved.
             setLayout((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
         };
@@ -99,7 +101,7 @@ export function useShellLayout(): ShellLayout {
             observer.disconnect();
             probe.remove();
         };
-    }, [touch]);
+    }, [touch, bots]);
     return layout;
 }
 
@@ -119,10 +121,12 @@ function TouchControls({
     layout,
     root,
     closeHelp,
+    botModes,
 }: {
     layout: ShellLayout;
     root: { current: HTMLDivElement | null };
     closeHelp: (() => void) | null;
+    botModes?: readonly BotMode[];
 }) {
     const [held, setHeld] = useState<Set<ButtonId>>(new Set());
     const [settings, updateSettings] = useOnlineSettings();
@@ -140,6 +144,15 @@ function TouchControls({
         else if (id === 'full') toggle_fullscreen();
         else if (id === 'music') updateSettings({ muteMusic: !settings.muteMusic });
         else if (id === 'effects') updateSettings({ muteEffects: !settings.muteEffects });
+        else {
+            const slot = (BOT_BUTTONS as readonly string[]).indexOf(id);
+            if (slot >= 0)
+                for (const type of ['keydown', 'keyup']) {
+                    window.dispatchEvent(
+                        new KeyboardEvent(type, { key: String(slot + 1), code: `Digit${slot + 1}`, bubbles: true })
+                    );
+                }
+        }
     };
     const layoutRef = useRef(layout);
     layoutRef.current = layout;
@@ -266,18 +279,21 @@ function TouchControls({
 
     return (
         <>
-            <ControlArtwork layout={layout} held={held} muted={muted} />
+            <ControlArtwork layout={layout} held={held} muted={muted} botModes={botModes} />
             {(Object.entries(layout.buttons) as [ButtonId, Rect | undefined][]).map(([id, rect]) => {
-                const utility = id === 'back' || id === 'full' || id === 'music' || id === 'effects';
+                const utility = id !== 'left' && id !== 'right' && id !== 'jump';
+                const bot = (BOT_BUTTONS as readonly string[]).indexOf(id);
                 const Tag = utility ? 'button' : 'div';
                 const label =
-                    id === 'back'
-                        ? 'Escape'
-                        : id === 'full'
-                          ? 'Toggle fullscreen'
-                          : id === 'music'
-                            ? 'Mute music'
-                            : 'Mute sound effects';
+                    bot >= 0
+                        ? `Player ${bot + 1}: ${BOT_MODE_NAMES[botModes?.[bot] ?? 0]}. Cycle bot difficulty`
+                        : id === 'back'
+                          ? 'Escape'
+                          : id === 'full'
+                            ? 'Toggle fullscreen'
+                            : id === 'music'
+                              ? 'Mute music'
+                              : 'Mute sound effects';
                 return (
                     rect && (
                         <Tag
@@ -287,6 +303,7 @@ function TouchControls({
                             data-button={id}
                             data-pressed={held.has(id)}
                             data-muted={muted.has(id)}
+                            data-bot-mode={bot >= 0 ? BOT_MODE_NAMES[botModes?.[bot] ?? 0].toLowerCase() : undefined}
                             aria-hidden={utility ? undefined : true}
                             aria-label={utility ? label : undefined}
                             aria-pressed={id === 'music' || id === 'effects' ? muted.has(id) : undefined}
@@ -312,15 +329,32 @@ function TouchControls({
     );
 }
 
-function ControlArtwork({ layout, held, muted }: { layout: ShellLayout; held: Set<ButtonId>; muted: Set<ButtonId> }) {
+function ControlArtwork({
+    layout,
+    held,
+    muted,
+    botModes,
+}: {
+    layout: ShellLayout;
+    held: Set<ButtonId>;
+    muted: Set<ButtonId>;
+    botModes?: readonly BotMode[];
+}) {
     const ref = useRef<HTMLCanvasElement>(null);
     useLayoutEffect(() => {
         const canvas = ref.current;
         if (!canvas) return;
-        canvas.width = layout.view.w;
-        canvas.height = layout.view.h;
-        draw_touch_controls(canvas.getContext('2d')!, layout, held, muted);
-    }, [layout, held, muted]);
+        if (canvas.width !== layout.view.w) canvas.width = layout.view.w;
+        if (canvas.height !== layout.view.h) canvas.height = layout.view.h;
+        // Present one complete bitmap so scene changes cannot leave partially repainted controls.
+        const artwork = document.createElement('canvas');
+        artwork.width = layout.view.w;
+        artwork.height = layout.view.h;
+        draw_touch_controls(artwork.getContext('2d')!, layout, held, muted, botModes);
+        const context = canvas.getContext('2d')!;
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(artwork, 0, 0);
+    }, [layout, held, muted, botModes]);
     return (
         <canvas
             ref={ref}
@@ -350,6 +384,7 @@ export function Shell({
     style,
     stageRef,
     fullscreenHelp: FullscreenHelp,
+    botModes,
     children,
 }: {
     width: number;
@@ -357,9 +392,10 @@ export function Shell({
     style: (scale: number) => JSX.CSSProperties;
     stageRef?: Ref<HTMLDivElement>;
     fullscreenHelp: ComponentType<FullscreenHelpProps>;
+    botModes?: readonly BotMode[];
     children: ComponentChildren;
 }) {
-    const layout = useShellLayout();
+    const layout = useShellLayout(botModes !== undefined);
     const root = useRef<HTMLDivElement>(null);
     const [fullscreenIssue, setFullscreenIssue] = useState<FullscreenIssue | null>(null);
     const closeHelp = () => setFullscreenIssue(null);
@@ -414,7 +450,12 @@ export function Shell({
             className={`gp-root${layout.mode === 'plain' ? '' : ' gp-touch-shell'}`}
             style={{ '--control-pixel': `${layout.pixel_scale}px` } as JSX.CSSProperties}
         >
-            <TouchControls layout={layout} root={root} closeHelp={fullscreenIssue ? closeHelp : null} />
+            <TouchControls
+                layout={layout}
+                root={root}
+                closeHelp={fullscreenIssue ? closeHelp : null}
+                botModes={botModes}
+            />
             <div
                 className="gp-screen"
                 style={{ left: `${box.x}px`, top: `${box.y}px`, width: `${box.w}px`, height: `${box.h}px` }}

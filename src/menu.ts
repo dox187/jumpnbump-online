@@ -1,4 +1,4 @@
-// Changed by dox187 on 2026-09-29 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
+// Changed by dox187 on 2026-09-29 and 2026-10-01 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
 
 import { JNB_MAX_PLAYERS, JNB_VERSION, KEY, MOD, NUM, OBJ, OBJ_ANIM, SCREEN_WIDTH, SFX, SFX_FREQ } from './constants';
 import { read_pcx } from './data';
@@ -20,6 +20,7 @@ import ctx from './context';
 import { player_anims } from './animation';
 import { run_in_frame_loop } from './loop';
 import { get_gob } from './assets';
+import { set_local_phase } from './local-controls';
 
 let menu_background;
 let menu_mask;
@@ -35,7 +36,8 @@ const message = [
     'Fizz: J I L     Mijji: numpad 4 8 6',
     'Jump over the log to join the game,',
     'then run off the right edge to start!',
-    'In the game, 1-4 switch computer bunnies',
+    '1-4: Easy, Medium, Hard, then Human',
+    'Bots join you; run right to start!',
     'SHIFT F: fullscreen     ESC: back',
 ];
 
@@ -56,6 +58,7 @@ export async function menu() {
     const rabbit_gobs = get_gob('rabbit');
 
     if ((await menu_init()) != 0) return 1;
+    set_local_phase('lobby');
 
     /* After a game, we have to release the keys, cause AI player
      * can still be using them */
@@ -101,13 +104,6 @@ export async function menu() {
     async function menu_game_loop() {
         dj_mix();
 
-        for (
-            c1 = 0;
-            c1 < JNB_MAX_PLAYERS;
-            c1++ // set AI to false
-        )
-            ctx.ai[c1] = 0;
-
         while (update_count) {
             if (key_pressed(KEY.ESCAPE) && !esc_pressed) {
                 end_loop_flag = 1;
@@ -117,9 +113,19 @@ export async function menu() {
             } else if (!key_pressed(KEY.ESCAPE)) esc_pressed = 0;
 
             update_player_actions();
+            for (let slot = 0; slot < JNB_MAX_PLAYERS; slot++) {
+                if (!ctx.ai[slot]) continue;
+                const p = player[slot];
+                const x = p.x / 65536;
+                const stopping_x = x + (p.x_add / 65536) * 4;
+                const waiting_x = 248 + slot * 24;
+                p.action_left = stopping_x > waiting_x + 3;
+                p.action_right = stopping_x < waiting_x - 3;
+                p.action_up = x > 140 + slot * 2 && x < 216 + slot * 2 && (p.jump_ready === 1 || p.y_add < 0);
+            }
             for (c1 = 0; c1 < JNB_MAX_PLAYERS; c1++) {
                 if (end_loop_flag == 1 && new_game_flag == 1) {
-                    if (player[c1].x >> 16 > 165 + c1 * 2) {
+                    if (player[c1].x >> 16 > 165 + c1 * 2 || ctx.ai[c1]) {
                         if (player[c1].x_add < 0) player[c1].x_add += 16384;
                         else player[c1].x_add += 12288;
                         if (player[c1].x_add > 98304) player[c1].x_add = 98304;
@@ -497,7 +503,7 @@ export async function menu() {
                         player[c1].x = 0;
                         player[c1].x_add = 0;
                     }
-                    if (player[c1].x >> 16 > SCREEN_WIDTH) {
+                    if (player[c1].x >> 16 > SCREEN_WIDTH && !ctx.ai[c1]) {
                         end_loop_flag = 1;
                         new_game_flag = 1;
                         memset(menu_pal, 0, 768);

@@ -277,7 +277,7 @@ The controls on a **QWERTY** keyboard are:
 - J, I, L to steer Fizz
 - 4, 8, 6 to steer Mijji (on the numeric pad)
 
-- 1-4 switch the computer player for that bunny on or off during a game
+- 1-4 cycle each bunny through **Human -> Easy -> Medium -> Hard -> Human**, in the local lobby or during a game
 - F (SHIFT + f) toggles fullscreen
 - ESC ends the current game. From the game's menu it returns to the level picker; close the picker to return to
   the start page.
@@ -285,10 +285,19 @@ The controls on a **QWERTY** keyboard are:
 In the menu, jump over the log to join and run off the right edge to start. The local game uses your selected level
 and the sound, gore and flies settings from **OPTIONS**.
 
-Computer bunnies plan short sequences with the same physics as human players. They anticipate movement, look for
-routes around platforms, use springs, and back up for another approach when stuck beneath a ledge. The 1-4 keys
-toggle them for bunnies already in the game, including bunnies with customized controls or gamepads. They remain
-exclusive to local play.
+Computer bunnies use the same physics and route planning on every difficulty: they find paths around platforms,
+use springs, and back up for another approach when stuck beneath a ledge. **Easy** reacts more slowly in close
+encounters and looks only a short time ahead; **Medium** reacts sooner and plans further ahead; **Hard** retains
+the full-strength movement planner. Custom keyboard and gamepad controls work on every
+difficulty. A brief message identifies the selected mode when it changes.
+
+In the local lobby, enabling a bot makes it hop over the log and wait on the other side. Bots never start a match;
+a human player runs off the right edge to start. Selected difficulties carry over to the next match on that level.
+During a match the number keys change control of participating bunnies; they do not add an absent bunny.
+
+Phones and tablets also show four small **1 2 3 4** buttons in the local lobby and match, half the size of the other
+utility buttons. They perform the same cycle as the keyboard. The numbers are **white** for human control,
+**green** for Easy, **yellow** for Medium and **red** for Hard. Computer players remain exclusive to local play.
 
 ## License
 

@@ -1,7 +1,8 @@
 /** Fit the native-aspect display around comfortable thumb positions and safe utility corners. */
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../../constants';
 
-export type ButtonId = 'left' | 'right' | 'jump' | 'back' | 'full' | 'music' | 'effects';
+export const BOT_BUTTONS = ['bot1', 'bot2', 'bot3', 'bot4'] as const;
+export type ButtonId = 'left' | 'right' | 'jump' | 'back' | 'full' | 'music' | 'effects' | (typeof BOT_BUTTONS)[number];
 export type Rect = { x: number; y: number; w: number; h: number };
 export type Insets = { top: number; right: number; bottom: number; left: number };
 export type ShellLayout = {
@@ -79,7 +80,7 @@ function plain_layout(
     };
 }
 
-export function screen_layout(
+function base_layout(
     width: number,
     height: number,
     dpr: number,
@@ -192,4 +193,73 @@ export function screen_layout(
     if (!candidates.length) return plain_layout(area, width, height, dpr, mobile, safe);
     const best = candidates.reduce((a, b) => (b.box.w > a.box.w + EPSILON ? b : a));
     return { ...best, safe, pixel_scale: scale, view: { w: Math.ceil(width / scale), h: Math.ceil(height / scale) } };
+}
+
+/** Add half-size local bot keys in free space, leaving the game and existing controls clear. */
+export function screen_layout(
+    width: number,
+    height: number,
+    dpr: number,
+    mobile: boolean,
+    touch: boolean,
+    safe: Insets = NO_INSETS,
+    bots = false
+): ShellLayout {
+    let layout = base_layout(width, height, dpr, mobile, touch, safe);
+    if (!mobile || !bots) return layout;
+    const scale = layout.pixel_scale;
+    const size = Math.max(6, Math.floor(layout.buttons.full!.w / 2));
+    const gap = Math.ceil(8 / scale);
+    const left = Math.ceil(safe.left / scale) + gap;
+    const top = Math.ceil(safe.top / scale) + gap;
+    const right = Math.floor((width - safe.right) / scale) - gap;
+    const bottom = Math.floor((height - safe.bottom) / scale) - gap;
+    const obstacles: Rect[] = [
+        ...Object.values(layout.buttons),
+        { x: layout.box.x / scale, y: layout.box.y / scale, w: layout.box.w / scale, h: layout.box.h / scale },
+    ];
+    let best: { x: number; y: number; columns: number; score: number } | null = null;
+    for (const columns of [4, 2]) {
+        const rows = 4 / columns;
+        const w = columns * size + (columns - 1) * gap;
+        const h = rows * size + (rows - 1) * gap;
+        const xs = [
+            left,
+            right - w,
+            ...obstacles.flatMap((r) => [Math.ceil(r.x + r.w + gap), Math.floor(r.x - w - gap)]),
+        ];
+        const ys = [
+            top,
+            bottom - h,
+            ...obstacles.flatMap((r) => [Math.ceil(r.y + r.h + gap), Math.floor(r.y - h - gap)]),
+        ];
+        for (const x of xs)
+            for (const y of ys) {
+                if (x < left || x + w > right || y < top || y + h > bottom) continue;
+                if (
+                    obstacles.some(
+                        (r) => x < r.x + r.w + gap && x + w > r.x - gap && y < r.y + r.h + gap && y + h > r.y - gap
+                    )
+                )
+                    continue;
+                const score = (y - top) * 2 + (x - left) * 0.1 + (rows - 1) * size;
+                if (!best || score < best.score) best = { x, y, columns, score };
+            }
+    }
+    if (!best) {
+        // Very small windows reserve a separate header rather than cover the screen or another key.
+        layout = base_layout(width, height, dpr, mobile, touch, { ...safe, top: safe.top + (size + 2 * gap) * scale });
+        layout.safe = safe;
+        best = { x: Math.round((left + right - 4 * size - 3 * gap) / 2), y: top, columns: 4, score: 0 };
+    }
+    const buttons = { ...layout.buttons };
+    BOT_BUTTONS.forEach((id, slot) => {
+        buttons[id] = {
+            x: best.x + (slot % best.columns) * (size + gap),
+            y: best.y + Math.floor(slot / best.columns) * (size + gap),
+            w: size,
+            h: size,
+        };
+    });
+    return { ...layout, buttons };
 }

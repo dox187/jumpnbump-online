@@ -75,6 +75,7 @@ import { Pob, register_gob, get_gob } from './assets';
 import { GameInputDevice } from 'inputs';
 import { INPUT_LEFT, INPUT_RIGHT, INPUT_UP, Sim, create_state } from './sim/sim';
 import { LocalBot } from './local-bot';
+import { set_local_phase } from './local-controls';
 import { local_fx } from './fx';
 
 let endscore_reached = 0;
@@ -108,6 +109,7 @@ function collision_check() {
 
 async function game_loop() {
     for (const bot of local_bots) bot.reset();
+    set_local_phase('playing');
     const main_info = ctx.info;
     const player = ctx.player;
     let mod_vol, sfx_vol;
@@ -339,6 +341,7 @@ async function menu_loop() {
         main_info.page_info.num_pobs = 0;
 
         await game_loop();
+        set_local_phase('scores');
         if (game_stopped()) {
             dj_stop_sfx_channel(4);
             deinit_level();
@@ -519,7 +522,8 @@ export async function main(canvas: HTMLCanvasElement, options: MainOptions): Pro
 function cpu_move() {
     const map = get_ban_map();
     const masks = local_bots.map((bot, slot) => {
-        if (ctx.ai[slot]) return bot.input(ctx.player, slot, map, cheats);
+        const mode = ctx.ai[slot];
+        if (mode) return bot.input(ctx.player, slot, map, cheats, mode);
         bot.reset();
         return null;
     });
@@ -1101,6 +1105,7 @@ export function init_program(canvas: HTMLCanvasElement, datafile: ArrayBuffer, p
 }
 
 export function deinit_program() {
+    set_local_phase('inactive');
     dj_stop();
     dj_deinit();
     deinit_controls_listener();

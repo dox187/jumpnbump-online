@@ -1,10 +1,10 @@
-// Changed by dox187 on 2026-09-29 and 2026-09-30 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
+// Changed by dox187 on 2026-09-29, 2026-09-30 and 2026-10-01 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
 
 import { KEY } from '../constants';
 import { poll_events, get_mouse_buttons } from './events';
 import { toggle_fullscreen } from './gfx';
-import ctx from '../context';
 import { GamepadPresses, PAD_BACK, PAD_START } from '../extra-input';
+import { cycle_local_bot } from '../local-controls';
 
 let lastTick = 0;
 const TICK_LENGTH = 1000 / 60;
@@ -77,7 +77,7 @@ export function intr_sysupdate(): number {
                 switch (ai_hotkeys_enabled || !is_ai_hotkey ? event.scancode : '') {
                     case KEY.ONE:
                         if (event.type === 'keydown') {
-                            ctx.ai[0] = !ctx.ai[0] ? 1 : 0;
+                            cycle_local_bot(0);
                         }
                         // release any pressed keys
                         addkey(KEY.PL1_LEFT, false);
@@ -86,7 +86,7 @@ export function intr_sysupdate(): number {
                         break;
                     case KEY.TWO:
                         if (event.type === 'keydown') {
-                            ctx.ai[1] = !ctx.ai[1] ? 1 : 0;
+                            cycle_local_bot(1);
                         }
                         // release any pressed keys
                         addkey(KEY.PL2_LEFT, false);
@@ -95,7 +95,7 @@ export function intr_sysupdate(): number {
                         break;
                     case KEY.THREE:
                         if (event.type === 'keydown') {
-                            ctx.ai[2] = !ctx.ai[2] ? 1 : 0;
+                            cycle_local_bot(2);
                         }
                         // release any pressed keys
                         addkey(KEY.PL3_LEFT, false);
@@ -104,7 +104,7 @@ export function intr_sysupdate(): number {
                         break;
                     case KEY.FOUR:
                         if (event.type === 'keydown') {
-                            ctx.ai[3] = !ctx.ai[3] ? 1 : 0;
+                            cycle_local_bot(3);
                         }
                         // release any pressed keys
                         addkey(KEY.PL4_LEFT, false);

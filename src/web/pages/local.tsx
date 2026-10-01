@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 import { Engine } from '../../engine';
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../../constants';
-import { DEFAULT_LEVEL } from '../../net/protocol';
+import { BUNNY_NAMES, DEFAULT_LEVEL } from '../../net/protocol';
+import { BOT_MODE_NAMES, get_local_controls, subscribe_local_controls } from '../../local-controls';
 import { LevelDialog } from '../components/level-dialog';
 import { usePageMeta } from '../hooks/page-meta';
 import { useOnlineSettings } from '../hooks/online-settings';
@@ -33,6 +34,16 @@ export default function Local() {
     const [running, setRunning] = useState(false);
     const [failed, setFailed] = useState(false);
     const [fontReady, setFontReady] = useState(false);
+    const [controls, setControls] = useState(get_local_controls);
+    const [notice, setNotice] = useState<typeof controls.change>(null);
+    useEffect(() => subscribe_local_controls(() => setControls(get_local_controls())), []);
+    useEffect(() => {
+        setNotice(controls.change);
+        if (!controls.change) return;
+        const timer = window.setTimeout(() => setNotice(null), 2000);
+        return () => clearTimeout(timer);
+    }, [controls.change]);
+    const botControls = running && !failed && (controls.phase === 'lobby' || controls.phase === 'playing');
     useKeyboardNav(!running || failed ? stage : null);
 
     const chooseAgain = () => {
@@ -119,6 +130,7 @@ export default function Local() {
             style={pixel_variables}
             stageRef={setStage}
             fullscreenHelp={FullscreenHelp}
+            botModes={botControls ? controls.modes : undefined}
         >
             <canvas
                 ref={setCanvas}
@@ -131,6 +143,28 @@ export default function Local() {
                     visibility: running ? 'visible' : 'hidden',
                 }}
             />
+            {botControls && notice && (
+                <div
+                    className="gp-abs"
+                    role="status"
+                    aria-live="polite"
+                    style={{
+                        top: gp(4),
+                        left: 0,
+                        width: gp(SCREEN_WIDTH),
+                        display: 'flex',
+                        justifyContent: 'center',
+                        pointerEvents: 'none',
+                    }}
+                >
+                    <div style={{ background: 'rgba(0,0,0,0.85)', padding: `${gp(1)} ${gp(4)}` }}>
+                        <Text
+                            text={`${BUNNY_NAMES[notice.slot].toUpperCase()}: ${BOT_MODE_NAMES[notice.mode]}`}
+                            color={(['white', 'green', 'gold', 'red'] as const)[notice.mode]}
+                        />
+                    </div>
+                </div>
+            )}
             {fontReady && !level && !failed && (
                 <LevelDialog
                     selected={selected}

@@ -1,5 +1,6 @@
 import { BAN } from './constants';
 import type { BanMap } from './sim/ban-map';
+import type { BotDifficulty } from './local-controls';
 import {
     INPUT_LEFT,
     INPUT_RIGHT,
@@ -23,6 +24,11 @@ const ACTIONS = [0, INPUT_LEFT, INPUT_RIGHT, INPUT_UP, INPUT_LEFT | INPUT_UP, IN
 ACTIONS.push([INPUT_LEFT, INPUT_RIGHT | INPUT_UP], [INPUT_RIGHT, INPUT_LEFT | INPUT_UP]);
 const TILE_SIZE = 16;
 const FIXED = 65536;
+const COMBAT = {
+    1: { reaction: 24, prediction: 12, threat: 0.35 },
+    2: { reaction: 12, prediction: 24, threat: 0.85 },
+    3: { reaction: THINK_INTERVAL, prediction: LOOKAHEAD, threat: 1.5 },
+} as const;
 
 /** A local computer player. Planning uses private, silent copies of the normal physics. */
 export class LocalBot {
@@ -41,6 +47,8 @@ export class LocalBot {
     private anchor_y = 0;
     private escape_until = 0;
     private escape_direction = 1;
+    private difficulty: BotDifficulty = 3;
+    private next_combat_think = 0;
 
     reset() {
         this.frame = 0;
@@ -48,10 +56,21 @@ export class LocalBot {
         this.target = -1;
         this.target_cell = -1;
         this.escape_until = 0;
+        this.next_combat_think = 0;
         this.visits.fill(0);
     }
 
-    input(players: SimPlayer[], slot: number, map: BanMap, cheats: SimCheats = NO_CHEATS): number {
+    input(
+        players: SimPlayer[],
+        slot: number,
+        map: BanMap,
+        cheats: SimCheats = NO_CHEATS,
+        difficulty: BotDifficulty = 3
+    ): number {
+        if (difficulty !== this.difficulty) {
+            this.difficulty = difficulty;
+            this.reset();
+        }
         const player = players[slot];
         if (!player.enabled || player.dead_flag) {
             this.reset();
@@ -100,7 +119,11 @@ export class LocalBot {
                 this.anchor_x = x;
                 this.anchor_y = y;
             }
-            this.mask = this.plan(players, slot, cheats);
+            const fighting = difficulty !== 3 && this.in_combat(player, target);
+            if (!fighting || this.frame >= this.next_combat_think) {
+                this.mask = this.plan(players, slot, cheats, fighting ? difficulty : 3);
+                this.next_combat_think = this.frame + COMBAT[difficulty].reaction;
+            }
         }
         this.frame++;
         return this.jump_input(this.mask, player, cheats);
@@ -108,6 +131,21 @@ export class LocalBot {
 
     private is_target(players: SimPlayer[], slot: number, target: number) {
         return target >= 0 && target !== slot && players[target].enabled && !players[target].dead_flag;
+    }
+
+    /** Soften close encounters, keeping the full navigation planner for walls and distant opponents. */
+    private in_combat(player: SimPlayer, target: SimPlayer) {
+        const dx = (target.x - player.x) / FIXED;
+        const dy = (target.y - player.y) / FIXED;
+        if (Math.abs(dx) > 80 || Math.abs(dy) > 64) return false;
+        const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / 8));
+        for (let i = 1; i < steps; i++) {
+            const x = Math.floor((player.x / FIXED + 8 + (dx * i) / steps) / TILE_SIZE);
+            const y = Math.max(0, Math.floor((player.y / FIXED + 8 + (dy * i) / steps) / TILE_SIZE));
+            const tile = this.map.tiles[y]?.[x];
+            if (tile !== BAN.VOID && tile !== BAN.WATER) return false;
+        }
+        return true;
     }
 
     private find_target(players: SimPlayer[], slot: number) {
@@ -227,7 +265,7 @@ export class LocalBot {
         return mask;
     }
 
-    private plan(players: SimPlayer[], slot: number, cheats: SimCheats) {
+    private plan(players: SimPlayer[], slot: number, cheats: SimCheats, difficulty: BotDifficulty) {
         this.source.player = players;
         const sim = this.sim;
         sim.cheats = cheats;
@@ -235,6 +273,7 @@ export class LocalBot {
             (p) => (p.x_add < 0 ? INPUT_LEFT : p.x_add > 0 ? INPUT_RIGHT : 0) | (p.action_up ? INPUT_UP : 0)
         );
         const start = players[slot];
+        const combat = COMBAT[difficulty];
         let best = -Infinity;
         let action = 0;
         for (const [mask, follow] of ACTIONS) {
@@ -242,7 +281,7 @@ export class LocalBot {
             // Never predict a respawn or consult its random location.
             for (const p of sim.state.player) if (p.dead_flag) p.enabled = false;
             let score = mask === this.mask ? 0.5 : 0;
-            for (let frame = 0; frame < LOOKAHEAD; frame++) {
+            for (let frame = 0; frame < combat.prediction; frame++) {
                 const p = sim.state.player[slot];
                 // Do not reach the original jetpack's fixed-point overflow ahead of the real game.
                 if (sim.state.player.some((other) => other.enabled && other.y < -0x7ff00000)) break;
@@ -266,7 +305,7 @@ export class LocalBot {
                 score -= this.distance(x, y, target) * 0.5 + dx * 0.15;
                 if (dx < 64) {
                     score += Math.min(48, Math.max(0, above)) * (1 - dx / 64);
-                    if (above < 0 && above > -48) score -= Math.max(0, 40 - dx) * 1.5;
+                    if (above < 0 && above > -48) score -= Math.max(0, 40 - dx) * combat.threat;
                 } else {
                     score -= this.visits[this.cell(x, y)] * 2;
                 }

@@ -1,8 +1,9 @@
-// Changed by dox187 on 2026-09-29 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
+// Changed by dox187 on 2026-09-29 and 2026-10-01 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
 
 import { GameInputDevice } from 'inputs';
 import { Pob } from './assets';
 import { DEFAULT_CONTROLS, JNB_MAX_PLAYERS, NUM } from './constants';
+import type { BotMode } from './local-controls';
 
 class Player {
     action_left: boolean;
@@ -62,7 +63,7 @@ type GameContext = {
         pob_backbuf: number[];
     };
     player: Player[];
-    ai: (0 | 1)[];
+    ai: BotMode[];
     objects: GameObject[];
     controls: GameInputDevice[];
 };
