@@ -67,7 +67,7 @@ const onlinePageMeta: PageMeta = {
     robots: 'noindex',
 };
 
-/** Where the Source links point; set VITE_SOURCE_URL at build time when you publish your own changes. */
+/** Source code in About; set VITE_SOURCE_URL at build time when you publish your own changes. */
 const SOURCE_URL = import.meta.env.VITE_SOURCE_URL || 'https://github.com/dox187/jumpnbump-online';
 
 type Toast = { message: string; color: TextColor; seq: number; at: number; ms?: number };
@@ -139,29 +139,6 @@ function At({
         <div className={`gp-abs ${className}`} style={style}>
             {children}
         </div>
-    );
-}
-
-/** A link in the game font; without `href` it is a button. Links to other sites open in a new window. */
-function TextLink({ href, label, onClick }: { href?: string; label: string; onClick?: () => void }) {
-    const [hot, setHot] = useState(false);
-    const Tag = href ? 'a' : 'button';
-    const external = href !== undefined && /^https?:\/\//.test(href);
-    return (
-        <Tag
-            href={href}
-            target={external ? '_blank' : undefined}
-            rel={external ? 'noopener noreferrer' : undefined}
-            type={href ? undefined : 'button'}
-            className="inline-flex cursor-pointer"
-            onClick={onClick}
-            onMouseEnter={() => setHot(true)}
-            onMouseLeave={() => setHot(false)}
-            onFocus={() => setHot(true)}
-            onBlur={() => setHot(false)}
-        >
-            <Text text={label} color={hot ? 'gold' : 'dim'} shadow />
-        </Tag>
     );
 }
 
@@ -625,13 +602,13 @@ const SECRETS = ['jetpack', 'pogostick', 'lordoftheflies', 'bunniesinspace', 'bl
 function AboutDialog({ onClose }: { onClose: () => void }) {
     const [secrets, setSecrets] = useState(false);
     return (
-        <Dialog title={secrets ? 'SECRETS' : 'ABOUT'} onClose={onClose} width={300}>
+        <Dialog title={secrets ? 'SECRETS' : 'ABOUT'} onClose={onClose} width={320}>
             <div className="gp-col">
                 {secrets ? (
                     <>
                         <Paragraph
                             text="Type these words during a local game to switch them on or off. They do not work online."
-                            width={284}
+                            width={302}
                         />
                         <div className="gp-col" style={{ gap: 0, alignItems: 'center' }}>
                             {SECRETS.map((word) => (
@@ -641,30 +618,40 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
                     </>
                 ) : (
                     <>
-                        <Paragraph
-                            text="Jump 'n Bump was made in 1998 by Brainchild Design:"
-                            width={284}
-                            color="gold"
-                        />
-                        <div className="gp-col" style={{ gap: 0 }}>
-                            <Paragraph text="Mattias Brynervall - code" width={284} />
-                            <Paragraph text="Andreas Brynervall and Martin Magnusson - graphics" width={284} />
-                            <Paragraph text="Anders Nilsson - music and sound" width={284} />
+                        <div className="gp-col">
+                            <Paragraph text="Original game: Brainchild Design (1998)" width={302} color="gold" />
+                            <div
+                                style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: `${gp(64)} 1fr`,
+                                    columnGap: gp(6),
+                                }}
+                            >
+                                <Text text="Code" color="dim" />
+                                <Text text="Mattias Brynervall" />
+                                <Text text="Graphics" color="dim" />
+                                <div className="gp-col" style={{ gap: 0 }}>
+                                    <Text text="Andreas Brynervall" />
+                                    <Text text="Martin Magnusson" />
+                                </div>
+                                <Text text="Sound" color="dim" />
+                                <Text text="Anders Nilsson" />
+                            </div>
                         </div>
-                        <Paragraph
-                            text="Jamie Sinclair ported it to the browser (jumpnbump.js). This version adds online play."
-                            width={284}
-                        />
-                        <Paragraph
-                            text="It is free software under the GNU GPL, version 2 or later."
-                            width={284}
-                            color="dim"
-                        />
+                        <div className="gp-col" style={{ gap: 0 }}>
+                            <Text text="Browser port" color="gold" />
+                            <Paragraph text="Jamie Sinclair - jumpnbump.js" width={302} />
+                        </div>
+                        <div className="gp-col" style={{ gap: 0 }}>
+                            <Text text="Online multiplayer" color="gold" />
+                            <Paragraph text="Created by dox187." width={302} />
+                        </div>
+                        <Paragraph text="Free software under GNU GPL v2 or later." width={302} color="dim" />
                     </>
                 )}
-                <div className="gp-row justify-between">
-                    <TextLink href={SOURCE_URL} label="Source code" />
-                    <div className="gp-row" style={{ gap: gp(3) }}>
+                <div className="gp-row justify-between" style={{ padding: gp(2) }}>
+                    {!secrets && <Button href={SOURCE_URL} label="SOURCE CODE" />}
+                    <div className="gp-row" style={{ gap: gp(3), marginLeft: 'auto' }}>
                         <Button label={secrets ? 'BACK' : 'SECRETS'} onClick={() => setSecrets(!secrets)} />
                         <Button label="OK" primary onClick={onClose} width={40} />
                     </div>
@@ -1214,7 +1201,6 @@ export default function Online() {
                             <Button href="/local" label="LOCAL" title="Play a local game" />
                             <Button label="OPTIONS" onClick={() => setDialog('options')} />
                             <Button label="ABOUT" onClick={() => setDialog('about')} />
-                            <Button href={SOURCE_URL} label="SOURCE" />
                             {appInstall.visible && (
                                 <Button label="INSTALL" onClick={install} disabled={appInstall.pending} />
                             )}

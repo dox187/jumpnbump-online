@@ -71,8 +71,9 @@ cd jumpnbump-online
 podman build -t jumpnbump-online:latest .      # or: docker build -t jumpnbump-online:latest .
 ```
 
-If you changed the code, point the **SOURCE** links at your own repository, as the GPL asks you to offer the source
-of the version you serve: add `--build-arg VITE_SOURCE_URL=https://example.com/your/repository` to the build.
+If you changed the code, point the **SOURCE CODE** button in **ABOUT** at your own repository, as the GPL asks you
+to offer the source of the version you serve: add `--build-arg VITE_SOURCE_URL=https://example.com/your/repository`
+to the build.
 
 Run it directly:
 
@@ -113,7 +114,7 @@ npm start       # serves everything on http://0.0.0.0:8080
 | `STATIC_DIR`         | `dist`               | The built website                                                                  |
 | `LEVELS_DIR`         | `$STATIC_DIR/levels` | Where the server reads level files from (it needs their collision maps)            |
 | `TRUST_PROXY`        | off                  | Set to `1` behind a reverse proxy so rate limits see `X-Forwarded-For`             |
-| `VITE_SOURCE_URL`    | this repository      | Build time: where the **SOURCE** link points; use your fork if you change the code |
+| `VITE_SOURCE_URL`    | this repository      | Build time: where **SOURCE CODE** in **ABOUT** points; use your fork if you change the code |
 
 Rooms and matches live in memory; restarting the server closes them.
 
