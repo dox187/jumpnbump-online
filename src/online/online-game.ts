@@ -1,5 +1,5 @@
 // Contains code from src/main.ts, src/menu.ts and src/renderer.ts of jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js),
-// changed by dox187 on 2026-09-29 and 2026-09-30.
+// changed by dox187 on 2026-09-29, 2026-09-30 and 2026-10-01.
 
 /**
  * Runs one online match in a canvas: loads the level, drives the NetSession every animation frame,
@@ -43,7 +43,8 @@ import { INPUT_LEFT, INPUT_RIGHT, INPUT_UP, NO_CHEATS, Sim, SimFx, SimState, clo
 import type { Pob } from '../assets';
 import { CAPS_TOP, TextColor, fit_text, font_ready, init_font, render_text } from '../web/pixel/font';
 import { PAD_A, PAD_B, extra_mask } from '../extra-input';
-import { PANEL_NAME_X, PANEL_NAME_Y, clear_panel_names, render_panel_name } from './panel-names';
+import { clear_panel_names, render_panel_name } from './panel-names';
+import { panel_name_layouts } from './panel-layouts';
 
 export type OnlineGameOptions = {
     canvas: HTMLCanvasElement;
@@ -187,7 +188,7 @@ export class OnlineGame {
         set_ai_hotkeys_enabled(false);
         init_level_scene(this.pal);
         const background = read_pcx('level.pcx', this.pal);
-        clear_panel_names(background);
+        clear_panel_names(background, options.match.level);
         register_background(background, this.pal);
         // Masks copy pixels from the background, including the labels on some custom levels.
         register_mask(read_pcx('mask.pcx', null), this.pal);
@@ -274,10 +275,11 @@ export class OnlineGame {
     }
 
     private make_name_tags(names: (string | null)[]) {
+        const layouts = panel_name_layouts(this.options.match.level);
         for (let i = 0; i < JNB_MAX_PLAYERS; i++) {
             const name = names[i];
             const color: TextColor = i === this.options.slot ? 'gold' : 'white';
-            this.plate_tags[i] = name ? { canvas: render_panel_name(name, i) } : null;
+            this.plate_tags[i] = name ? { canvas: render_panel_name(name, i, layouts[i].width) } : null;
             this.score_tags[i] = name ? name_tag(name, SCORE_NAME_WIDTH, color) : null;
         }
     }
@@ -300,10 +302,12 @@ export class OnlineGame {
         const alpha = this.brightness();
         if (alpha <= 0) return;
         screen.globalAlpha = alpha;
+        const layouts = panel_name_layouts(this.options.match.level);
         for (let i = 0; i < JNB_MAX_PLAYERS; i++) {
             const tag = this.plate_tags[i];
             if (!tag || !state.player[i].enabled) continue;
-            screen.drawImage(tag.canvas, PANEL_NAME_X, PANEL_NAME_Y + i * 64 - 2);
+            const layout = layouts[i];
+            screen.drawImage(tag.canvas, 352 + layout.x, layout.y + i * 64);
         }
         screen.globalAlpha = 1;
     }

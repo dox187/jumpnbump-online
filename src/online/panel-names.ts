@@ -1,7 +1,5 @@
 import { SCREEN_WIDTH } from '../constants';
-
-export const PANEL_NAME_X = 359;
-export const PANEL_NAME_Y = 25;
+import { panel_name_layouts } from './panel-layouts';
 export const PANEL_NAME_WIDTH = 35;
 
 /** Compact pixel outlines; the renderer varies their height and lean like the hand-lettered panel names. */
@@ -50,17 +48,47 @@ const LETTERS: Record<string, string> = {
     ' ': '00/00/00/00/00/00',
 };
 
+/** The flat panel material, rather than a single sample that may land on a letter or a portrait. */
+function panel_color(pixels: Uint8ClampedArray, top: number, left: number, first: number, right: number, last: number) {
+    const counts = new Uint16Array(256);
+    let color = 0;
+    for (let y = first; y <= last; y++) {
+        for (let x = left; x <= right; x++) {
+            const pixel = pixels[(top + y) * SCREEN_WIDTH + 352 + x];
+            if (++counts[pixel] > counts[color]) color = pixel;
+        }
+    }
+    return color;
+}
+
 /** Remove the baked-in labels in palette space, retaining the portraits, stone edges and score recesses. */
-export function clear_panel_names(pixels: Uint8ClampedArray) {
+export function clear_panel_names(pixels: Uint8ClampedArray, level: string) {
+    const layouts = panel_name_layouts(level);
     for (let slot = 0; slot < 4; slot++) {
         const top = slot * 64;
-        // Some custom panels have a recessed label strip instead of the original flat stone.
-        const recessed = pixels[(top + 22) * SCREEN_WIDTH + 389] !== pixels[(top + 25) * SCREEN_WIDTH + 389];
-        for (let row = 22; row <= 30; row++) {
+        const { erase } = layouts[slot];
+        if (erase) {
+            // Read from the untouched artwork: a source column may itself be inside another cleared row.
+            const original = pixels.slice(top * SCREEN_WIDTH, (top + 64) * SCREEN_WIDTH);
+            for (const [left, first, right, last, source_x, source_y] of erase) {
+                const material = panel_color(original, 0, left, first, right, last);
+                for (let row = first; row <= last; row++) {
+                    const color =
+                        source_x === undefined ? material : original[(source_y ?? row) * SCREEN_WIDTH + 352 + source_x];
+                    pixels.fill(
+                        color,
+                        (top + row) * SCREEN_WIDTH + 352 + left,
+                        (top + row) * SCREEN_WIDTH + 353 + right
+                    );
+                }
+            }
+            continue;
+        }
+        const stone = panel_color(pixels, top, 6, 25, 37, 31);
+        for (let row = 22; row <= 31; row++) {
             // The portraits extend into the upper right corner of the label area.
-            const right = !recessed && (row < 24 || (row === 24 && slot === 0)) ? 370 : 387;
+            const right = row < 24 || (row === 24 && slot === 0) ? 370 : 387;
             const y = top + row;
-            const stone = pixels[y * SCREEN_WIDTH + 389];
             pixels.fill(stone, y * SCREEN_WIDTH + 358, y * SCREEN_WIDTH + right + 1);
         }
     }
@@ -90,7 +118,7 @@ const GLYPH_ROWS: Record<number, number[]> = {
     7: [0, 1, 2, 2, 3, 4, 5],
 };
 
-export function render_panel_name(name: string, slot: number): HTMLCanvasElement {
+export function render_panel_name(name: string, slot: number, max_width = PANEL_NAME_WIDTH): HTMLCanvasElement {
     const glyphs = Array.from(name.normalize('NFC').toUpperCase(), (letter, index) => {
         const [base, ...accents] = Array.from(letter.normalize('NFD'));
         const rows = (LETTERS[base] ?? LETTERS['?']).split('/');
@@ -105,8 +133,8 @@ export function render_panel_name(name: string, slot: number): HTMLCanvasElement
         };
     });
     const width = () => glyphs.reduce((sum, glyph) => sum + glyph.rows[0].length + glyph.lean + 1, 0);
-    if (width() > PANEL_NAME_WIDTH) {
-        while (glyphs.length && width() + 4 > PANEL_NAME_WIDTH) glyphs.pop();
+    if (width() > max_width) {
+        while (glyphs.length && width() + 4 > max_width) glyphs.pop();
         const dot = { rows: LETTERS['.'].split('/'), accents: [], height: 6, lean: 0 };
         glyphs.push(dot, dot);
     }
