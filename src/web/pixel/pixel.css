@@ -57,6 +57,13 @@
     animation-play-state: paused !important;
 }
 
+/* Battery saver: nothing animates outside matches */
+.gp-still *,
+.gp-still *::before,
+.gp-still *::after {
+    animation: none !important;
+}
+
 .gp-ping {
     position: absolute;
     right: calc(var(--px) * 3);

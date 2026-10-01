@@ -5,7 +5,13 @@ import { useNet } from '../hooks/net';
 import { useGamepads } from '../hooks/gamepads';
 import { useLobbyActivity } from '../hooks/lobby-activity';
 import { Ping } from '../components/ping';
-import { OnlineSettings, is_mobile_device, touch_enabled, useOnlineSettings } from '../hooks/online-settings';
+import {
+    OnlineSettings,
+    battery_saver_enabled,
+    is_mobile_device,
+    touch_enabled,
+    useOnlineSettings,
+} from '../hooks/online-settings';
 import { ConfigureController } from '../components/configure-controller';
 import { LevelDialog, Thumbnail } from '../components/level-dialog';
 import { MAPPINGS, getFriendlyGamepadName, getGamepadId, getKnownGamepadDefaults } from '../controls';
@@ -43,7 +49,7 @@ import {
     gp,
 } from '../pixel/components';
 import { TextColor, text_width } from '../pixel/font';
-import { BUNNY_SPOTS, RemoteHop, SCENE_X, SCENE_Y, Scene, SceneBunny, SceneOwnBunny } from '../pixel/scene';
+import { BUNNY_SPOTS, RemoteHop, SCENE_X, SCENE_Y, Scene, SceneBunny, SceneOwnBunny, home_hop } from '../pixel/scene';
 import { InputTracker, is_text_field, read_input_mask, track_input } from '../pixel/hop';
 import { has_keyboard_focus, lend_gamepads } from '../pixel/keyboard-nav';
 import { extra_mask, set_configured_gamepad } from '../../extra-input';
@@ -346,16 +352,20 @@ const TIPS = [
     'The host picks one of over 250 levels.',
 ];
 
-/** Messages under the forest, one after the other, like in the original menu. */
-function Tips({ paused = false }: { paused?: boolean }) {
+/** Messages under the forest, one after the other, like in the original menu; with `still` just the first one. */
+function Tips({ paused = false, still = false }: { paused?: boolean; still?: boolean }) {
     const [index, setIndex] = useState(0);
     useEffect(() => {
-        if (paused) return;
+        if (paused || still) return;
         const timer = setInterval(() => setIndex((i) => (i + 1) % TIPS.length), 6000);
         return () => clearInterval(timer);
-    }, [paused]);
+    }, [paused, still]);
     return (
-        <div key={index} className="gp-fade" style={{ display: 'flex', justifyContent: 'center', width: gp(400) }}>
+        <div
+            key={index}
+            className={still ? undefined : 'gp-fade'}
+            style={{ display: 'flex', justifyContent: 'center', width: gp(400) }}
+        >
             <Text text={TIPS[index]} color="white" />
         </div>
     );
@@ -366,11 +376,14 @@ function Lobby({
     onCreate,
     onJoinLocked,
     paused = false,
+    still = false,
 }: {
     state: NetState;
     onCreate: () => void;
     onJoinLocked: (room: RoomSummary) => void;
     paused?: boolean;
+    /** Battery saver: nothing moves. */
+    still?: boolean;
 }) {
     const [searching, setSearching] = useState(false);
     const [query, setQuery] = useState('');
@@ -501,7 +514,7 @@ function Lobby({
                 </Panel>
             </At>
             <At x={SCENE_X} y={218}>
-                <Tips paused={paused} />
+                <Tips paused={paused} still={still} />
             </At>
         </>
     );
@@ -578,6 +591,11 @@ function OptionsDialog({
                                 onChange={(touch) => updateSettings({ touch })}
                             />
                         )}
+                        <Checkbox
+                            label="Battery saver"
+                            checked={battery_saver_enabled(settings)}
+                            onChange={(batterySaver) => updateSettings({ batterySaver })}
+                        />
                     </div>
                     {!musicAvailable && (
                         <Paragraph
@@ -1038,7 +1056,13 @@ export default function Online() {
     // Only players have a bunny to move (a slot 0-3); nobody hops while a match is shown
     const mySlot = state.room?.members.find((m) => m.id === state.me?.id)?.slot;
     const hopSlot = !state.match && typeof mySlot === 'number' && mySlot >= 0 && mySlot < BUNNY_NAMES.length;
-    const ownHop = useOwnHop(hopSlot ? mySlot! : null, deviceFor(settings, gamepads));
+    // The battery saver keeps the forest still: your bunny stays at its spot and the keys work the menu
+    const saver = battery_saver_enabled(settings);
+    const ownHop = useOwnHop(hopSlot && !saver ? mySlot! : null, deviceFor(settings, gamepads));
+    useEffect(() => {
+        // It may have hopped away before the battery saver was turned on; the others see it back at its spot
+        if (saver && hopSlot) net.send({ t: 'hop', s: home_hop(mySlot!, ROOM_HOP_MAX_X) });
+    }, [saver, hopSlot, mySlot, state.room?.id]);
 
     // The other players' bunnies, from the hop samples the server relays
     const netRef = useRef(state);
@@ -1101,7 +1125,7 @@ export default function Online() {
     return (
         <Stage navSkip={navSkip}>
             <div
-                className={`gp-online-content${inactive ? ' gp-inactive' : ''}`}
+                className={`gp-online-content${inactive ? ' gp-inactive' : ''}${saver ? ' gp-still' : ''}`}
                 inert={inactive || undefined}
                 aria-hidden={inactive || undefined}
             >
@@ -1112,6 +1136,7 @@ export default function Online() {
                     own={room ? ownHop : undefined}
                     remote={room ? remoteHops : undefined}
                     paused={inactive}
+                    still={saver}
                 />
 
                 {!room && online && (
@@ -1168,6 +1193,7 @@ export default function Online() {
                         onCreate={() => setDialog('create')}
                         onJoinLocked={setLockedRoom}
                         paused={inactive}
+                        still={saver}
                     />
                 )}
                 {online && room && (
