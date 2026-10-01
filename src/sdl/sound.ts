@@ -102,22 +102,25 @@ function sfx_audio(): AudioContext | null {
     return sfx_context;
 }
 
-function resume_effects(): Promise<void> {
+function resume_effects(from_gesture = false): Promise<void> {
     effects_wanted = true;
     const audio = sfx_audio();
     if (!audio || audio.state === 'closed') return Promise.resolve();
-    if (sfx_resuming) return sfx_resuming;
+    // An autoplay-blocked resume can stay pending until a later gesture calls resume() again.
+    // Reusing that promise inside the gesture would leave every effect waiting forever.
+    if (sfx_resuming && !from_gesture) return sfx_resuming;
     const resume = () => audio.resume();
-    // Call resume synchronously during a gesture whenever there is no pending suspend.
-    const done = sfx_suspending ? sfx_suspending.then(resume) : resume();
-    sfx_resuming = done
+    // Preserve the gesture even during a pending suspend; the browser queues these calls in order.
+    const done = sfx_suspending && !from_gesture ? sfx_suspending.then(resume) : resume();
+    const pending = done
         .catch(() => {})
         .finally(() => {
-            sfx_resuming = null;
+            if (sfx_resuming === pending) sfx_resuming = null;
             // Leaving the game or hiding the app also wins over a resume that was still waiting on the device.
             if (!effects_wanted || document.hidden) suspend_effects();
         });
-    return sfx_resuming;
+    sfx_resuming = pending;
+    return pending;
 }
 
 function suspend_effects() {
@@ -456,15 +459,15 @@ export function dj_init_audio_gestures() {
     gestures_initialized = true;
     const gesture = (event: Event) => {
         if (!event.isTrusted) return;
-        if (!sfx_context || game_audio || preview === 'effects') {
-            void resume_effects().then(() => {
+        if (!sfx_context || sfx_resuming || game_audio || preview === 'effects') {
+            void resume_effects(true).then(() => {
                 if (!game_audio && preview !== 'effects') suspend_effects();
             });
         }
         if (game_audio) dj_start_mod();
         if (preview === 'music' && preview_track) preview_track.context.resume().catch(() => {});
     };
-    for (const type of ['pointerdown', 'pointerup', 'touchend', 'keydown']) {
+    for (const type of ['pointerdown', 'mousedown', 'pointerup', 'touchend', 'keydown', 'click']) {
         window.addEventListener(type, gesture, { capture: true, passive: true });
     }
     window.addEventListener('blur', dj_stop_preview);
