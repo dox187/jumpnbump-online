@@ -4,6 +4,8 @@ import { PageMeta, usePageMeta } from '../hooks/page-meta';
 import { useNet } from '../hooks/net';
 import { useGamepads } from '../hooks/gamepads';
 import { useLobbyActivity } from '../hooks/lobby-activity';
+import { prompt_app_install, useAppInstall } from '../hooks/app-install';
+import { InstallDialog } from '../components/install-dialog';
 import { Ping } from '../components/ping';
 import { OnlineSettings, is_mobile_device, touch_enabled, useOnlineSettings } from '../hooks/online-settings';
 import { ConfigureController } from '../components/configure-controller';
@@ -982,6 +984,7 @@ export default function Online() {
     const inactive = state.status === 'inactive';
     useLobbyActivity(!inactive && !state.room && !state.match);
     const [settings, updateSettings, loaded] = useOnlineSettings();
+    const appInstall = useAppInstall();
     const gamepads = useGamepads();
     // Every gamepad works without setup, except the one picked as the control: that one keeps its own buttons
     useEffect(() => {
@@ -990,10 +993,19 @@ export default function Online() {
     }, [settings.control]);
     const [assets, setAssets] = useState<GameAssets | null>(game_assets());
     const [assetsFailed, setAssetsFailed] = useState(false);
-    const [dialog, setDialog] = useState<'name' | 'create' | 'options' | 'about' | null>(null);
+    const [dialog, setDialog] = useState<'name' | 'create' | 'options' | 'about' | 'install' | null>(null);
     const [lockedRoom, setLockedRoom] = useState<RoomSummary | null>(null);
     const [toast, setToast] = useState<Toast | null>(null);
     const toastSeq = useRef(0);
+
+    const install = async () => {
+        const outcome = await prompt_app_install();
+        if (outcome === 'unavailable') setDialog('install');
+    };
+
+    useEffect(() => {
+        if (!appInstall.visible && dialog === 'install') setDialog(null);
+    }, [appInstall.visible, dialog]);
 
     const showToast = (message: string, color: TextColor = 'red', ms?: number) =>
         setToast({ message, color, seq: ++toastSeq.current, at: Date.now(), ms });
@@ -1175,12 +1187,15 @@ export default function Online() {
                 )}
 
                 {!room && (
-                    <At x={SCENE_X + 8} bottom={4}>
-                        <div className="gp-row" style={{ gap: gp(8) }}>
-                            <TextLink href="/local" label="Local game" />
-                            <TextLink label="Options" onClick={() => setDialog('options')} />
-                            <TextLink label="About" onClick={() => setDialog('about')} />
-                            <TextLink href={SOURCE_URL} label="Source" />
+                    <At x={SCENE_X + 6} bottom={4}>
+                        <div className="gp-row" style={{ gap: gp(3) }}>
+                            <Button href="/local" label="LOCAL" title="Play a local game" />
+                            <Button label="OPTIONS" onClick={() => setDialog('options')} />
+                            <Button label="ABOUT" onClick={() => setDialog('about')} />
+                            <Button href={SOURCE_URL} label="SOURCE" />
+                            {appInstall.visible && (
+                                <Button label="INSTALL" onClick={install} disabled={appInstall.pending} />
+                            )}
                         </div>
                     </At>
                 )}
@@ -1208,6 +1223,14 @@ export default function Online() {
                     />
                 )}
                 {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
+                {dialog === 'install' && appInstall.visible && (
+                    <InstallDialog
+                        available={appInstall.available}
+                        pending={appInstall.pending}
+                        onInstall={install}
+                        onClose={() => setDialog(null)}
+                    />
+                )}
                 {lockedRoom && !room && <PasswordDialog room={lockedRoom} onClose={() => setLockedRoom(null)} />}
 
                 <ToastView toast={toast} onDismiss={() => net.clear_error()} />

@@ -56,8 +56,8 @@ Features of the online mode:
 - [Phones and tablets](#phones-and-tablets): portrait and landscape layouts with touch controls outside the game.
 - Local settings per player: controls, mute music or sound effects, no gore, no flies.
 
-The original local game (up to four players on one keyboard, with computer players) is still available: **Local
-game** on the start page (`/local`) starts it right away in the game's own menu.
+The original local game (up to four players on one keyboard, with computer players) is still available: **LOCAL**
+on the start page (`/local`) starts it right away in the game's own menu.
 
 ## Installation
 
@@ -191,6 +191,11 @@ original proportions and use the largest screen area that fits alongside the con
 - **Move and jump:** left/right sit together under the left thumb, with jump under the right thumb. The buttons
   stay clear of the game and leave room for your grip above the bottom edge.
 - **ESC and fullscreen:** ESC stays in the upper-left corner and fullscreen in the upper-right, in either orientation.
+- **Install as an app:** press **INSTALL** in the main menu to open the browser's installation prompt. If the
+  browser cannot show it, the button gives installation steps for your device, including after you dismissed an
+  earlier offer. On iOS it shows the same Home Screen instructions as the fullscreen button. Chrome on Android
+  also offers **Add to Home screen > Install** in its menu; Samsung Internet has an install icon in the address bar.
+  The button is hidden when the game runs as an app. Installation needs HTTPS (or localhost).
 - **Music and sound:** the music-note and speaker buttons toggle music and sound effects independently, even
   during a match. A slash marks a muted channel; the game remembers these preferences.
 - **Screen fit:** the game keeps its original aspect ratio, and the translucent controls share one consistent

@@ -1,4 +1,4 @@
-// Changed by dox187 on 2026-09-29 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
+// Changed by dox187 on 2026-09-29 and 2026-10-01 from jumpnbump.js (https://github.com/jamsinclair/jumpnbump.js).
 
 import { useEffect } from 'preact/hooks';
 import {
@@ -12,6 +12,7 @@ import {
     useLocation,
 } from 'preact-iso';
 import { PageMeta } from './hooks/page-meta';
+import { init_app_install } from './hooks/app-install';
 
 import './app.css';
 
@@ -40,6 +41,7 @@ function App() {
 }
 
 if (typeof window !== 'undefined') {
+    init_app_install();
     hydrate(<App />, document.getElementById('app'));
 }
 

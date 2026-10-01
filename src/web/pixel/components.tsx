@@ -280,6 +280,7 @@ export function Panel({
 
 export function Button({
     label,
+    href,
     onClick,
     disabled = false,
     primary = false,
@@ -289,6 +290,7 @@ export function Button({
     className = '',
 }: {
     label: string;
+    href?: string;
     onClick?: () => void;
     disabled?: boolean;
     primary?: boolean;
@@ -300,11 +302,16 @@ export function Button({
 }) {
     const [hot, setHot] = useState(false);
     const color: TextColor = disabled ? 'dim' : hot ? 'gold' : primary ? 'green' : 'white';
+    const Tag = href ? 'a' : 'button';
+    const external = href !== undefined && /^https?:\/\//.test(href);
     return (
-        <button
-            type={type}
+        <Tag
+            href={href}
+            target={external ? '_blank' : undefined}
+            rel={external ? 'noopener noreferrer' : undefined}
+            type={href ? undefined : type}
             className={`gp-button${primary ? ' gp-button-primary' : ''} ${className}`}
-            disabled={disabled}
+            disabled={href ? undefined : disabled}
             title={title}
             style={width ? { minWidth: gp(width) } : undefined}
             onClick={onClick}
@@ -314,7 +321,7 @@ export function Button({
             onBlur={() => setHot(false)}
         >
             <Text text={label} color={color} />
-        </button>
+        </Tag>
     );
 }
 
