@@ -114,7 +114,7 @@ function press_escape() {
     setTimeout(() => key('keyup'), 100);
 }
 
-/** The touch buttons: several fingers at once, and a finger may slide from one button to another. */
+/** The touch buttons: several fingers at once, with movement activated wherever a held finger slides. */
 function TouchControls({
     layout,
     root,
@@ -149,7 +149,8 @@ function TouchControls({
     useEffect(() => {
         const element = root.current;
         if (!element) return;
-        const pointers = new Map<number, ButtonId>();
+        // A null button keeps tracking a held finger outside the controls, ready to slide onto one.
+        const pointers = new Map<number, ButtonId | null>();
         setHeld(new Set());
         const hit = (x: number, y: number): ButtonId | null => {
             const { buttons, pixel_scale, box, safe } = layoutRef.current;
@@ -179,7 +180,7 @@ function TouchControls({
             return nearest;
         };
         const apply = () => {
-            const now = new Set(pointers.values());
+            const now = new Set([...pointers.values()].filter((id) => id !== null));
             touch_input.left = now.has('left');
             touch_input.right = now.has('right');
             touch_input.jump = now.has('jump');
@@ -187,25 +188,36 @@ function TouchControls({
         };
         const down = (event: PointerEvent) => {
             const id = hit(event.clientX, event.clientY);
-            if (!id) return;
-            event.preventDefault();
+            if (!id && (event.pointerType !== 'touch' || layoutRef.current.mode === 'plain')) return;
+            if (id) event.preventDefault();
             if (helpRef.current) {
                 if (id === 'back' || id === 'full') helpRef.current();
                 return;
             }
             pointers.set(event.pointerId, id);
-            element.setPointerCapture(event.pointerId);
-            apply();
+            // Leave taps and scrolling in the game menus alone until a movement button is reached.
+            if (id) {
+                element.setPointerCapture(event.pointerId);
+                apply();
+            }
         };
         const move = (event: PointerEvent) => {
             const current = pointers.get(event.pointerId);
-            if (!current || (current !== 'left' && current !== 'right' && current !== 'jump')) return;
+            if (
+                current === undefined ||
+                (current !== null && current !== 'left' && current !== 'right' && current !== 'jump') ||
+                helpRef.current
+            )
+                return;
             const id = hit(event.clientX, event.clientY);
-            // Slide between the movement buttons; leaving them releases
+            // Leaving a movement button releases it, but the finger can slide back without lifting.
             const next = id === 'left' || id === 'right' || id === 'jump' ? id : null;
             if (next === current) return;
-            if (next) pointers.set(event.pointerId, next);
-            else pointers.delete(event.pointerId);
+            pointers.set(event.pointerId, next);
+            if (next) {
+                event.preventDefault();
+                element.setPointerCapture(event.pointerId);
+            }
             apply();
         };
         const up = (event: PointerEvent) => {
@@ -216,6 +228,10 @@ function TouchControls({
         };
         const cancel = (event: PointerEvent) => {
             if (pointers.delete(event.pointerId)) apply();
+        };
+        const lost_capture = (event: PointerEvent) => {
+            // Taking over a finger from a menu child also emits this event for that child's old capture.
+            if (event.target === element) cancel(event);
         };
         // No magnifier, text selection or long-press menu on the buttons
         const touch_start = (event: TouchEvent) => {
@@ -229,6 +245,7 @@ function TouchControls({
         element.addEventListener('pointermove', move);
         element.addEventListener('pointerup', up);
         element.addEventListener('pointercancel', cancel);
+        element.addEventListener('lostpointercapture', lost_capture);
         element.addEventListener('touchstart', touch_start, { passive: false });
         window.addEventListener('blur', release);
         document.addEventListener('visibilitychange', release);
@@ -238,6 +255,7 @@ function TouchControls({
             element.removeEventListener('pointermove', move);
             element.removeEventListener('pointerup', up);
             element.removeEventListener('pointercancel', cancel);
+            element.removeEventListener('lostpointercapture', lost_capture);
             element.removeEventListener('touchstart', touch_start);
             window.removeEventListener('blur', release);
             document.removeEventListener('visibilitychange', release);
