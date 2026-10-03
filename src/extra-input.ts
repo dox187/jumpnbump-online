@@ -34,8 +34,6 @@ export const PAD_RIGHT = 15;
 
 /** How far the left stick has to be pushed sideways to run (or to move through a menu). */
 export const STICK_DEAD_ZONE = 0.5;
-/** Pushing the stick up jumps only when clearly meant, not when it tilts a little while running. */
-const STICK_JUMP = 0.65;
 
 /** The connected gamepads with the standard layout, in the order the browser numbered them (connection order). */
 export function standard_gamepads(): Gamepad[] {
@@ -57,15 +55,16 @@ export function pad_pressed(gamepad: Gamepad, button: number): boolean {
     return gamepad.buttons[button]?.pressed ?? false;
 }
 
-/** Left and right on the D-pad or the left stick, jump on A, B, D-pad up or the stick pushed up. */
+/**
+ * Left and right on the D-pad or the left stick, jump on A or B. Up on the D-pad or the stick does not jump: it
+ * is easily pressed by accident while running.
+ */
 export function pad_mask(gamepad: Gamepad): number {
     const x = gamepad.axes[0] ?? 0;
-    const y = gamepad.axes[1] ?? 0;
     let mask = 0;
     if (pad_pressed(gamepad, PAD_LEFT) || x < -STICK_DEAD_ZONE) mask |= INPUT_LEFT;
     if (pad_pressed(gamepad, PAD_RIGHT) || x > STICK_DEAD_ZONE) mask |= INPUT_RIGHT;
-    if (pad_pressed(gamepad, PAD_A) || pad_pressed(gamepad, PAD_B) || pad_pressed(gamepad, PAD_UP) || y < -STICK_JUMP)
-        mask |= INPUT_UP;
+    if (pad_pressed(gamepad, PAD_A) || pad_pressed(gamepad, PAD_B)) mask |= INPUT_UP;
     return mask;
 }
 
